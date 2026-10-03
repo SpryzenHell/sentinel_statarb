@@ -39,6 +39,8 @@ int main() {
   sentinel::ReportMessage report{};
   require(engine.on_order(order, report), "fresh order was rejected");
   require(report.status == 1, "fresh order status wrong");
+  require(report.oco_stop_spread < report.spread, "OCO stop was not armed");
+  require(report.oco_limit_spread < report.oco_stop_spread, "OCO limit was not offset");
   require(engine.state().fills == 1, "fill counter wrong");
 
   tick.ts_ns = now_ns();
