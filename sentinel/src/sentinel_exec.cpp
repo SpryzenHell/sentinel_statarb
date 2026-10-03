@@ -4,6 +4,7 @@
 #include <zmq.h>
 
 #include <atomic>
+#include <cstddef>
 #include <cerrno>
 #include <cstring>
 #include <iostream>
