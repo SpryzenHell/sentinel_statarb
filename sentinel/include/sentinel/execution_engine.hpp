@@ -47,6 +47,7 @@ class ExecutionEngine {
   Side open_side_{Side::kBuy};
   double entry_spread_{0.0};
   double stop_spread_{0.0};
+  double limit_spread_{0.0};
   double entry_notional_{100.0};
 };
 
