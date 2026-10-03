@@ -1,6 +1,6 @@
 #include <rigtorp/SPSCQueue.h>
-#include <atomic>
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
@@ -18,24 +18,23 @@ int main() {
 
   const auto t0 = std::chrono::steady_clock::now();
   std::thread consumer([&] {
-    Item item{};
     for (std::uint64_t i = 0; i < N; ++i) {
-      while (!q.try_pop(item)) {}
-      checksum += item.seq;
+      while (!q.front()) {}
+      checksum += q.front()->seq;
+      q.pop();
     }
   });
 
   for (std::uint64_t i = 0; i < N; ++i) {
-    Item item{i, 1.0};
-    q.emplace(item);
+    q.emplace(Item{i, 1.0});
   }
-
   consumer.join();
+
   const double sec = std::chrono::duration<double>(
       std::chrono::steady_clock::now() - t0).count();
-
   std::cout << "items=" << N
             << " throughput_mops=" << (N / sec / 1e6)
             << " checksum=" << checksum
-            << " capacity=" << q.capacity() << '\n';
+            << " atomic_size_lock_free=" << std::atomic<std::size_t>::is_always_lock_free
+            << " queue_capacity=" << q.capacity() << "\n";
 }
