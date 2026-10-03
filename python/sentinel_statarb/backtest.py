@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import Iterable, List
 
 import numpy as np
 
@@ -186,14 +186,22 @@ def generate_path(
     ]
 
 
-def run(
-    seed: int = 7,
-    n: int = 50_000,
-    crash_at: int = 25_000,
+def run_ticks(
+    ticks: Iterable[Tick],
+    *,
     dynamic: bool = True,
     execution: ExecutionConfig | None = None,
+    seed: int = -1,
+    crash_at: int | None = None,
 ) -> BacktestResult:
-    ticks = generate_path(seed, n, crash_at)
+    """Run the strategy and portfolio model on any ordered Tick iterable."""
+
+    tick_list = list(ticks)
+    if not tick_list:
+        raise ValueError("ticks must contain at least one observation")
+    if crash_at is not None and not 0 <= crash_at < len(tick_list):
+        raise ValueError("crash_at must be inside the supplied ticks")
+
     strategy = PairStrategy()
     if not dynamic:
         strategy.debouncer.base = 1
@@ -205,7 +213,7 @@ def run(
     trade_pnls: list[float] = []
     open_trade: _OpenTrade | None = None
 
-    for tick in ticks:
+    for tick in tick_list:
         previous_position = strategy.position
         strategy.update(tick)
         current_position = strategy.position
@@ -225,32 +233,31 @@ def run(
         equity_curve.append(portfolio.equity(tick))
 
     if open_trade is not None:
-        tick = ticks[-1]
+        tick = tick_list[-1]
         portfolio.exit_spread(tick)
         trade_pnls.append(portfolio.equity(tick) - open_trade.equity_before_entry)
         equity_curve[-1] = portfolio.equity(tick)
 
     eq = np.asarray(equity_curve, dtype=float)
-    if len(eq) == 0:
-        raise RuntimeError("backtest produced no equity observations")
-
     peak = np.maximum.accumulate(eq)
     drawdown = float(np.min(eq - peak))
 
-    anchor_idx = min(max(crash_at, 0), len(eq) - 1)
-    pre_crash_equity = float(eq[max(0, anchor_idx - 1)])
-    crash_end = min(len(eq), anchor_idx + 46)
-    crash_low = float(np.min(eq[anchor_idx:crash_end]))
-    flash_crash_loss = max(0.0, pre_crash_equity - crash_low)
+    if crash_at is None:
+        flash_crash_loss = 0.0
+    else:
+        pre_crash_equity = float(eq[max(0, crash_at - 1)])
+        crash_end = min(len(eq), crash_at + 46)
+        crash_low = float(np.min(eq[crash_at:crash_end]))
+        flash_crash_loss = max(0.0, pre_crash_equity - crash_low)
 
     wins = sum(1 for pnl in trade_pnls if pnl > 0.0)
     losses = sum(1 for pnl in trade_pnls if pnl < 0.0)
-    total_pnl = portfolio.equity(ticks[-1]) - portfolio.config.initial_cash
+    total_pnl = portfolio.equity(tick_list[-1]) - portfolio.config.initial_cash
 
     return BacktestResult(
         label="dynamic" if dynamic else "baseline",
         seed=seed,
-        ticks=n,
+        ticks=len(tick_list),
         trades_entered=portfolio.trade_count,
         exits=len(trade_pnls),
         stop_exits=strategy.stop_exits,
@@ -267,4 +274,21 @@ def run(
         losing_trades=losses,
         win_rate=float(wins / len(trade_pnls)) if trade_pnls else 0.0,
         avg_trade_pnl=float(np.mean(trade_pnls)) if trade_pnls else 0.0,
+    )
+
+
+def run(
+    seed: int = 7,
+    n: int = 50_000,
+    crash_at: int = 25_000,
+    dynamic: bool = True,
+    execution: ExecutionConfig | None = None,
+) -> BacktestResult:
+    ticks = generate_path(seed, n, crash_at)
+    return run_ticks(
+        ticks,
+        dynamic=dynamic,
+        execution=execution,
+        seed=seed,
+        crash_at=crash_at,
     )
