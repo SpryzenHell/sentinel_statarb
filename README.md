@@ -25,7 +25,7 @@ The C++ engine rejects orders whose latest quote exceeds `max_quote_age_us`. `se
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e '.[full]'
+pip install -e '.[full]'  # use '.[full,live]' for the optional Cryptofeed live bridge
 python scripts/run_backtest.py
 ```
 
@@ -57,6 +57,38 @@ python scripts/benchmark_duckdb.py --ticks 10000000 --batch 100000
 
 The 10M-row run is intentionally separate from the default smoke tests because it is a heavier storage benchmark.
 
+
+## Linux/HPC runtime profile
+
+The execution process accepts optional runtime controls:
+
+```bash
+./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4
+./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4 --mlock
+./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4 --fifo 20
+```
+
+`--cpu` pins the execution thread to one logical CPU. `--mlock` requests `mlockall`; `--fifo` requests `SCHED_FIFO`. The process reports whether each request succeeded. These controls can require elevated privileges or scheduler limits on the host.
+
+Capture host state before benchmarking:
+
+```bash
+python scripts/system_profile.py > results/system_profile.json
+```
+
+Direct C++ engine measurement with CPU pinning:
+
+```bash
+./build/sentinel/sentinel_engine_bench 200000 --cpu 4
+```
+
+Connected telemetry benchmark:
+
+```bash
+python scripts/benchmark_telemetry.py --ticks 10000000 --batch 100000 --cpu 4
+```
+
+The last command measures the C++ telemetry queue → ZeroMQ PUB/SUB → asynchronous DuckDB path. Use the host profile and benchmark artifact when discussing latency claims.
 
 ## Latest verified run
 
