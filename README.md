@@ -29,6 +29,28 @@ pip install -e '.[full]'  # use '.[full,live]' for the optional Cryptofeed live 
 python scripts/run_backtest.py
 ```
 
+The backtest now uses explicit two-leg portfolio accounting: A and B positions, bid/ask execution, configurable commission, explicit slippage, turnover, exposure, trade-level PnL, and equity-based drawdown.
+
+Tune the execution assumptions directly:
+
+```bash
+python scripts/run_backtest.py \
+  --target-notional 10000 \
+  --commission-bps 0.40 \
+  --slippage-bps 1.00
+```
+
+Run a sensitivity sweep over multiple execution-cost assumptions and crash locations:
+
+```bash
+python scripts/sensitivity_backtest.py \
+  --ticks 50000 \
+  --crash-at 10000,25000,40000 \
+  --cost-pairs '0:0,0.4:1,1:2,2:5,5:5'
+```
+
+The sweep writes `results/backtest_sensitivity.json`. These cost rates are research assumptions, not claims about a particular venue's fee schedule.
+
 ### C++ core
 
 ```bash
@@ -56,7 +78,6 @@ python scripts/benchmark_duckdb.py --ticks 10000000 --batch 100000
 ```
 
 The 10M-row run is intentionally separate from the default smoke tests because it is a heavier storage benchmark.
-
 
 ## Linux/HPC runtime profile
 
@@ -90,6 +111,20 @@ python scripts/benchmark_telemetry.py --ticks 10000000 --batch 100000 --cpu 4
 
 The last command measures the C++ telemetry queue → ZeroMQ PUB/SUB → asynchronous DuckDB path. Use the host profile and benchmark artifact when discussing latency claims.
 
+## Backtest accounting model
+
+The research engine deliberately separates signal generation from portfolio accounting:
+
+- A long spread buys A and sells `beta × B`; a short spread does the opposite.
+- Position size is scaled to a configurable gross-notional target.
+- Buys cross the ask and sells cross the bid; an additional configurable bps slippage is then applied adversely.
+- Commission is charged independently on each filled leg.
+- Equity is marked from the two-leg mid-market portfolio value, while drawdown is calculated from the resulting equity curve.
+- Trade PnL includes entry and exit execution costs; the output also reports fees, bid/ask crossing cost, explicit slippage, turnover, and max gross/net exposure.
+- The synthetic flash-crash metric is the positive equity loss from the tick immediately before the crash to the lowest equity observed in the following 45 ticks.
+
+This remains a simplified paper-trading model: it does not model exchange-specific queue position, partial fills, borrow constraints, financing, funding, or market impact.
+
 ## Latest verified run
 
 Verified in GitHub Actions on **2026-10-03**, run #41, Ubuntu x86_64, C++20/GCC 13.3, Python 3.12, with libzmq3-dev and DuckDB 1.5.6.
@@ -106,11 +141,13 @@ Verified in GitHub Actions on **2026-10-03**, run #41, Ubuntu x86_64, C++20/GCC 
 | ZeroMQ IPC transport | **39.082 us median / 47.499 us p99 / 59.230 us p99.9** |
 | Async DuckDB logging | **10,000,000 rows**, **2,662,236 rows/s** |
 
+The current branch contains newer research/accounting changes after run #41; those changes should be treated as **pending fresh CI verification** until the corresponding workflow completes.
+
 The direct C++ core measurement supports a sub-millisecond **core-function benchmark** on this runner. It does not establish the original resume's separate “HPC” environment claim.
 
 The ZeroMQ measurement is **not** sub-10 us on this runner, so that number should not be stated as a verified resume result without a dedicated target-hardware benchmark.
 
-The strategy comparison is deterministic synthetic data. In this run, the dynamic debouncer reduced entries from 1,994 to 56 and reduced the absolute synthetic maximum drawdown from 6.786 to 0.194 spread units. That is a benchmark result for this synthetic scenario, not a claim about live trading performance.
+The strategy comparison is deterministic synthetic data. The older run's protection result is a benchmark on that synthetic scenario, not a claim about live trading performance.
 
 ## Reproducibility
 
@@ -135,7 +172,6 @@ This repository does not claim “HPC”, “10M+ DuckDB”, “sub-10us”, or 
 ## Development window
 
 The supplied project configuration lists the intended project window as **2026-02-01 through 2026-05-31**. That configuration is retained as input metadata; new commits use their real commit timestamps.
-
 
 ## Heavy benchmark
 
