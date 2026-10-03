@@ -140,6 +140,7 @@ class PairStrategy:
         self.entries = 0
         self.exits = 0
         self.stop_exits = 0
+        self.last_exit_reason: str | None = None
 
     def update(self, tick: Tick) -> Signal:
         mid_a = 0.5 * (tick.bid_a + tick.ask_a)
@@ -147,6 +148,7 @@ class PairStrategy:
         beta = self.beta.update(mid_b, mid_a)
         spread = mid_a - beta * mid_b
         self.spreads.append(spread)
+        self.last_exit_reason = None
 
         if len(self.spreads) < max(30, self.window // 4):
             return Signal(0, 0.0, beta, self.debouncer.required(tick.volatility))
@@ -158,12 +160,14 @@ class PairStrategy:
 
         if self.bracket is not None:
             if self.bracket.check_stop(spread):
+                self.last_exit_reason = self.bracket.exit_reason
                 self.position = 0
                 self.exits += 1
                 self.stop_exits += 1
                 self.bracket = None
             elif not self.bracket.stop_triggered and abs(z) < self.exit_z:
                 self.bracket.cancel_other()
+                self.last_exit_reason = "mean_reversion"
                 self.position = 0
                 self.exits += 1
                 self.bracket = None
