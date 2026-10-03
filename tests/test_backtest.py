@@ -5,7 +5,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "python"))
 
-from sentinel_statarb.backtest import ExecutionConfig, PaperPortfolio, generate_path, run
+from sentinel_statarb.backtest import (
+    ExecutionConfig,
+    PaperPortfolio,
+    generate_path,
+    run,
+    run_ticks,
+)
 
 
 def test_portfolio_uses_two_leg_cash_accounting_and_costs():
@@ -56,6 +62,14 @@ def test_backtest_accounts_for_execution_costs():
     assert costly.spread_cost == pytest.approx(free.spread_cost, rel=1e-9, abs=1e-9)
     assert costly.slippage_cost > free.slippage_cost
     assert costly.pnl < free.pnl
+
+
+def test_run_ticks_accepts_streaming_iterables():
+    ticks = generate_path(seed=5, n=500, crash_at=250)
+    result = run_ticks(iter(ticks), dynamic=True, seed=-1, crash_at=250)
+    assert result.ticks == 500
+    assert result.pnl == pytest.approx(result.pnl)
+    assert result.max_gross_exposure >= 0.0
 
 
 def test_backtest_result_reports_non_negative_crash_loss():
