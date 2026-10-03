@@ -51,6 +51,14 @@ python scripts/sensitivity_backtest.py \
 
 The sweep writes `results/backtest_sensitivity.json`. These cost rates are research assumptions, not claims about a particular venue's fee schedule.
 
+Replay persisted telemetry from DuckDB through the same research and portfolio engine:
+
+```bash
+python scripts/replay_duckdb.py --db results/telemetry.duckdb --limit 100000
+```
+
+DuckDB rows are streamed in batches, so the replay path does not materialize the full dataset in Python memory.
+
 ### C++ core
 
 ```bash
@@ -141,7 +149,7 @@ Verified in GitHub Actions on **2026-10-03**, run #41, Ubuntu x86_64, C++20/GCC 
 | ZeroMQ IPC transport | **39.082 us median / 47.499 us p99 / 59.230 us p99.9** |
 | Async DuckDB logging | **10,000,000 rows**, **2,662,236 rows/s** |
 
-The current branch contains newer research/accounting changes after run #41; those changes should be treated as **pending fresh CI verification** until the corresponding workflow completes.
+The current branch contains newer research/accounting changes after run #41, including two-leg execution accounting, DuckDB replay, and constant-time rolling statistics; those changes should be treated as **pending fresh CI verification** until the corresponding workflow completes.
 
 The direct C++ core measurement supports a sub-millisecond **core-function benchmark** on this runner. It does not establish the original resume's separate “HPC” environment claim.
 
