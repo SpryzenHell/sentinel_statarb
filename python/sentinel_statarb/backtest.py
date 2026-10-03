@@ -218,6 +218,9 @@ def run_ticks(
     crash_low: float | None = None
 
     for tick in ticks:
+        if crash_at == count == 0:
+            crash_pre_equity = portfolio.equity(tick)
+
         previous_position = strategy.position
         strategy.update(tick)
         current_position = strategy.position
@@ -259,9 +262,9 @@ def run_ticks(
             crash_pre_equity = last_equity
         if crash_low is None:
             crash_low = last_equity
-        flash_crash_loss = max(0.0, crash_pre_equity - crash_low)
     else:
-        flash_crash_loss = 0.0
+        crash_pre_equity = None
+        crash_low = None
 
     if open_trade is not None:
         portfolio.exit_spread(last_tick)
@@ -269,6 +272,14 @@ def run_ticks(
         last_equity = portfolio.equity(last_tick)
         peak_equity = max(peak_equity, last_equity)
         min_drawdown = min(min_drawdown, last_equity - peak_equity)
+        if crash_at is not None and crash_at <= count - 1 <= crash_at + 45:
+            crash_low = last_equity if crash_low is None else min(crash_low, last_equity)
+
+    flash_crash_loss = (
+        0.0
+        if crash_at is None
+        else max(0.0, float(crash_pre_equity) - float(crash_low))
+    )
 
     wins = sum(1 for pnl in trade_pnls if pnl > 0.0)
     losses = sum(1 for pnl in trade_pnls if pnl < 0.0)
