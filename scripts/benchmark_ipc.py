@@ -11,7 +11,7 @@ import zmq
 
 ROOT = Path(__file__).parents[1]
 TICK_FMT = "<BQQddddd"
-ORDER_FMT = "<BbHQd"
+ORDER_FMT = "<BbHQQd"
 
 
 def pack_tick(seq: int, ts_ns: int) -> bytes:
