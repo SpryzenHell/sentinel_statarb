@@ -6,13 +6,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_library(sentinel_core STATIC src/execution_engine.cpp)
-target_include_directories(sentinel_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(sentinel_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/vendor)
 target_compile_options(sentinel_core PRIVATE -O3 -Wall -Wextra -Wpedantic)
 
 find_package(Threads REQUIRED)
 
 add_executable(sentinel_spsc_bench src/spsc_bench.cpp)
 target_link_libraries(sentinel_spsc_bench PRIVATE sentinel_core Threads::Threads)
+target_include_directories(sentinel_spsc_bench PRIVATE ${CMAKE_SOURCE_DIR}/vendor)
 target_compile_options(sentinel_spsc_bench PRIVATE -O3 -march=native)
 
 add_executable(sentinel_engine_smoke src/engine_smoke.cpp)
