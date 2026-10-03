@@ -194,13 +194,10 @@ def run_ticks(
     seed: int = -1,
     crash_at: int | None = None,
 ) -> BacktestResult:
-    """Run the strategy and portfolio model on any ordered Tick iterable."""
+    """Run strategy and portfolio accounting on an ordered, streamable Tick iterable."""
 
-    tick_list = list(ticks)
-    if not tick_list:
-        raise ValueError("ticks must contain at least one observation")
-    if crash_at is not None and not 0 <= crash_at < len(tick_list):
-        raise ValueError("crash_at must be inside the supplied ticks")
+    if crash_at is not None and crash_at < 0:
+        raise ValueError("crash_at must be non-negative")
 
     strategy = PairStrategy()
     if not dynamic:
@@ -209,11 +206,18 @@ def run_ticks(
         strategy.debouncer.reference_vol = 1.0
 
     portfolio = PaperPortfolio(execution or ExecutionConfig())
-    equity_curve: list[float] = []
     trade_pnls: list[float] = []
     open_trade: _OpenTrade | None = None
 
-    for tick in tick_list:
+    count = 0
+    last_tick: Tick | None = None
+    last_equity = portfolio.config.initial_cash
+    peak_equity = last_equity
+    min_drawdown = 0.0
+    crash_pre_equity: float | None = None
+    crash_low: float | None = None
+
+    for tick in ticks:
         previous_position = strategy.position
         strategy.update(tick)
         current_position = strategy.position
@@ -230,39 +234,55 @@ def run_ticks(
             open_trade = None
 
         portfolio.exposures(tick)
-        equity_curve.append(portfolio.equity(tick))
+        last_equity = portfolio.equity(tick)
+        peak_equity = max(peak_equity, last_equity)
+        min_drawdown = min(min_drawdown, last_equity - peak_equity)
+
+        if crash_at is not None:
+            if count == crash_at - 1:
+                crash_pre_equity = last_equity
+            if crash_at <= count <= crash_at + 45:
+                crash_low = (
+                    last_equity if crash_low is None else min(crash_low, last_equity)
+                )
+
+        last_tick = tick
+        count += 1
+
+    if last_tick is None:
+        raise ValueError("ticks must contain at least one observation")
+
+    if crash_at is not None:
+        if crash_at >= count:
+            raise ValueError("crash_at must be inside the supplied ticks")
+        if crash_pre_equity is None:
+            crash_pre_equity = last_equity
+        if crash_low is None:
+            crash_low = last_equity
+        flash_crash_loss = max(0.0, crash_pre_equity - crash_low)
+    else:
+        flash_crash_loss = 0.0
 
     if open_trade is not None:
-        tick = tick_list[-1]
-        portfolio.exit_spread(tick)
-        trade_pnls.append(portfolio.equity(tick) - open_trade.equity_before_entry)
-        equity_curve[-1] = portfolio.equity(tick)
-
-    eq = np.asarray(equity_curve, dtype=float)
-    peak = np.maximum.accumulate(eq)
-    drawdown = float(np.min(eq - peak))
-
-    if crash_at is None:
-        flash_crash_loss = 0.0
-    else:
-        pre_crash_equity = float(eq[max(0, crash_at - 1)])
-        crash_end = min(len(eq), crash_at + 46)
-        crash_low = float(np.min(eq[crash_at:crash_end]))
-        flash_crash_loss = max(0.0, pre_crash_equity - crash_low)
+        portfolio.exit_spread(last_tick)
+        trade_pnls.append(portfolio.equity(last_tick) - open_trade.equity_before_entry)
+        last_equity = portfolio.equity(last_tick)
+        peak_equity = max(peak_equity, last_equity)
+        min_drawdown = min(min_drawdown, last_equity - peak_equity)
 
     wins = sum(1 for pnl in trade_pnls if pnl > 0.0)
     losses = sum(1 for pnl in trade_pnls if pnl < 0.0)
-    total_pnl = portfolio.equity(tick_list[-1]) - portfolio.config.initial_cash
+    total_pnl = portfolio.equity(last_tick) - portfolio.config.initial_cash
 
     return BacktestResult(
         label="dynamic" if dynamic else "baseline",
         seed=seed,
-        ticks=len(tick_list),
+        ticks=count,
         trades_entered=portfolio.trade_count,
         exits=len(trade_pnls),
         stop_exits=strategy.stop_exits,
         pnl=float(total_pnl),
-        max_drawdown=drawdown,
+        max_drawdown=float(min_drawdown),
         flash_crash_loss=float(flash_crash_loss),
         fees=float(portfolio.fees),
         spread_cost=float(portfolio.spread_cost),
