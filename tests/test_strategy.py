@@ -16,5 +16,8 @@ def test_oco_is_one_shot_and_uses_five_bps():
     bracket = OCOBracket(1, 100.0, reference_notional=100.0, stop_bps=5.0)
     assert bracket.active
     assert not bracket.check_stop(99.96)
-    assert bracket.check_stop(99.94)
+    assert not bracket.check_stop(99.94)  # triggered, but below the 99.90 limit
+    assert bracket.stop_triggered
+    assert bracket.check_stop(99.90)
+    assert not bracket.active
     assert not bracket.check_stop(99.0)
