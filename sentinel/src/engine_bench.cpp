@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     else if (!arg.empty() && arg[0] != '-') n = std::stoi(arg);
   }
   if (cpu >= 0) sentinel::apply_runtime_profile({cpu, false, false, 10});
-  sentinel::ExecutionEngine engine({1.0, 1.0, 5.0, 250000.0});
+  sentinel::ExecutionEngine engine({1.0, 1.0, 5.0, 5.0, 250000.0});
   sentinel::TickMessage tick{};
   tick.type = sentinel::MessageType::kTick;
   tick.bid_a = 100.0; tick.ask_a = 100.01;
@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     sentinel::OrderMessage warm{}; warm.type=sentinel::MessageType::kOrder; warm.side=sentinel::Side::kBuy; warm.id=i; warm.ts_ns=tick.ts_ns; warm.qty=1.0;
     sentinel::ReportMessage r{}; engine.on_order(warm,r);
   }
-  engine = sentinel::ExecutionEngine({1.0, 1.0, 5.0, 250000.0});
+  engine = sentinel::ExecutionEngine({1.0, 1.0, 5.0, 5.0, 250000.0});
   for (int i = 0; i < n; ++i) {
     tick.ts_ns = now_ns(); tick.seq = static_cast<std::uint64_t>(i);
     engine.on_tick(tick);
