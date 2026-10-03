@@ -38,6 +38,9 @@ jobs:
       - name: Strategy backtest
         run: python scripts/run_backtest.py
 
+      - name: Linux host profile
+        run: python scripts/system_profile.py | tee results/system_profile.json
+
       - name: C++ engine latency benchmark
         run: ./build/sentinel/sentinel_engine_bench | tee results/engine_latency.txt
 
