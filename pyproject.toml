@@ -14,7 +14,7 @@ research = ["scipy>=1.11", "pandas>=2.0"]
 live = ["cryptofeed>=3.0.0"]
 storage = ["duckdb>=1.3", "pandas>=2.0"]
 dev = ["pytest>=8"]
-full = ["scipy>=1.11", "pandas>=2.0", "duckdb>=1.3", "cryptofeed>=3.0.0", "pytest>=8"]
+full = ["scipy>=1.11", "pandas>=2.0", "duckdb>=1.3", "pytest>=8"]
 
 [tool.setuptools.packages.find]
 where = ["python"]
