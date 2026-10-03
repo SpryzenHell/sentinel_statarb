@@ -135,3 +135,10 @@ This repository does not claim “HPC”, “10M+ DuckDB”, “sub-10us”, or 
 ## Development window
 
 The supplied project configuration lists the intended project window as **2026-02-01 through 2026-05-31**. That configuration is retained as input metadata; new commits use their real commit timestamps.
+
+
+## Heavy benchmark
+
+The repository also contains `.github/workflows/sentinel-heavy-benchmark.yml`, a manual GitHub Actions workflow for the connected 10M+ telemetry benchmark. It accepts `ticks` and `cpu` inputs and uploads the resulting host profile, telemetry results, and direct-engine latency artifact.
+
+Use this workflow when you need a fresh hardware-specific performance record; do not copy benchmark numbers between machines.
