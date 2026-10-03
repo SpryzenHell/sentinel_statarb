@@ -73,7 +73,18 @@ bool ExecutionEngine::on_order(const OrderMessage& order, ReportMessage& report)
     entry_notional_ = std::abs(0.5 * (last_tick_.bid_a + last_tick_.ask_a))
                     + std::abs(cfg_.hedge_ratio * 0.5 * (last_tick_.bid_b + last_tick_.ask_b));
     const double stop_offset = entry_notional_ * cfg_.oco_stop_bps * 1e-4;
+    const double limit_offset = entry_notional_ * cfg_.oco_stop_bps * 1e-4;
     stop_spread_ = entry_spread_ - static_cast<int>(open_side_) * stop_offset;
+    limit_spread_ = stop_spread_ - static_cast<int>(open_side_) * limit_offset;
+  }
+
+  report.oco_stop_spread = stop_spread_;
+  report.oco_limit_spread = limit_spread_;
+
+  const bool opposite = (open_side_ == Side::kBuy && order.side == Side::kSell) ||
+                        (open_side_ == Side::kSell && order.side == Side::kBuy);
+  if (oco_active_ && opposite && std::abs(state_.position_a) < 1e-12) {
+    oco_active_ = false;
   }
   return true;
 }
@@ -93,6 +104,8 @@ bool ExecutionEngine::check_oco(ReportMessage& report) {
   report.fill_a = (report.side == Side::kBuy) ? last_tick_.ask_a : last_tick_.bid_a;
   report.fill_b = (report.side == Side::kBuy) ? last_tick_.bid_b : last_tick_.ask_b;
   report.spread = s;
+  report.oco_stop_spread = stop_spread_;
+  report.oco_limit_spread = limit_spread_;
   report.status = 3;  // OCO stop execution
 
   state_.cash -= state_.position_a * report.fill_a;
