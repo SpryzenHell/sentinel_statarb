@@ -1,3 +1,4 @@
+import math
 import sys
 from pathlib import Path
 
@@ -68,7 +69,7 @@ def test_run_ticks_accepts_streaming_iterables():
     ticks = generate_path(seed=5, n=500, crash_at=250)
     result = run_ticks(iter(ticks), dynamic=True, seed=-1, crash_at=250)
     assert result.ticks == 500
-    assert result.pnl == pytest.approx(result.pnl)
+    assert math.isfinite(result.pnl)
     assert result.max_gross_exposure >= 0.0
 
 
