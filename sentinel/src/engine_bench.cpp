@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <string>
 #include <vector>
 
 static std::uint64_t now_ns() {
