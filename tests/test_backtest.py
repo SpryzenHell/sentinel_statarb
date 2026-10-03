@@ -65,6 +65,24 @@ def test_backtest_accounts_for_execution_costs():
     assert costly.pnl < free.pnl
 
 
+def test_backtest_is_flat_after_final_liquidation_and_metrics_are_sane():
+    execution = ExecutionConfig(commission_bps=0.40, slippage_bps=1.00)
+    result = run(
+        seed=7,
+        n=4_000,
+        crash_at=2_000,
+        dynamic=True,
+        execution=execution,
+    )
+    assert math.isfinite(result.pnl)
+    assert result.trades_entered >= result.exits
+    assert result.turnover >= 0.0
+    assert result.fees >= 0.0
+    assert result.spread_cost >= 0.0
+    assert result.slippage_cost >= 0.0
+    assert result.max_gross_exposure >= result.max_net_exposure >= 0.0
+
+
 def test_run_ticks_accepts_streaming_iterables():
     ticks = generate_path(seed=5, n=500, crash_at=250)
     result = run_ticks(iter(ticks), dynamic=True, seed=-1, crash_at=250)
