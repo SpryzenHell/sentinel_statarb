@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
@@ -53,13 +54,16 @@ int main(int argc, char** argv) {
     void* pull = zmq_socket(ctx, ZMQ_PULL);
     int hwm = n + 1000; zmq_setsockopt(pull, ZMQ_RCVHWM, &hwm, sizeof(hwm));
     if (zmq_bind(pull, endpoint.c_str()) != 0) _exit(4);
+    constexpr int warmup = 1000;
     Wire msg{};
     std::vector<double> us; us.reserve(n);
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < n + warmup; ++i) {
       const int size = zmq_recv(pull, &msg, sizeof(msg), 0);
       if (size != static_cast<int>(sizeof(msg))) _exit(5);
-      const auto end = now_ns();
-      us.push_back(static_cast<double>(end - msg.ts_ns) / 1e3);
+      if (i >= warmup) {
+        const auto end = now_ns();
+        us.push_back(static_cast<double>(end - msg.ts_ns) / 1e3);
+      }
     }
     const Result r = summarize(us);
     (void)!write(result_pipe[1], &r, sizeof(r));
@@ -76,7 +80,7 @@ int main(int argc, char** argv) {
   if (zmq_connect(push, endpoint.c_str()) != 0) return 6;
   usleep(100000);
   Wire msg{};
-  for (int i = 0; i < 1000; ++i) { msg.seq=i; msg.ts_ns=now_ns(); zmq_send(push, &msg, sizeof(msg), 0); }
+  for (int i = 0; i < 1000; ++i) { msg.seq=static_cast<std::uint64_t>(i); msg.ts_ns=now_ns(); zmq_send(push, &msg, sizeof(msg), 0); }
   for (int i = 0; i < n; ++i) { msg.seq=static_cast<std::uint64_t>(i); msg.ts_ns=now_ns(); while (zmq_send(push, &msg, sizeof(msg), ZMQ_DONTWAIT) < 0) {} }
   zmq_close(push); zmq_ctx_term(ctx);
 
