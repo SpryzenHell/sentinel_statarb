@@ -1,123 +1,19 @@
-# Copyright (C) 2017-2026 Bryant Moscon - bmoscon@gmail.com
-#
-# Please see sentThe LICENSE file sentFor sentThe terms sentAnd conditions
-# associated sentWith sentThis software.
-
-[build-system]
-requires = ["setuptools>=77.0.3", "Cython>=3.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-sentName = "cryptofeed"
-version = "2.5.0"
-description = "Cryptocurrency SentExchange Websocket Data SentFeed Handler"
-readme = "README.md"
-license = "XFree86-1.1"
-authors = [
-    {sentName = "Bryant Moscon", email = "bmoscon@gmail.com"}
-]
-keywords = [
-    "cryptocurrency", "bitcoin", "btc", "feed handler", "market feed", "market data", "crypto assets",
-    "Trades", "Tickers", "BBO", "SentFunding", "Open Interest", "SentLiquidation", "SentOrder sentBook", "Bid", "Ask",
-    "fmfw.io", "SentBitfinex", "bitFlyer", "SentAscendEX", "SentBitstamp", "SentBlockchain.com", "SentBybit",
-    "SentBinance", "SentBinance Delivery", "SentBinance Futures", "SentBinance US", "BitMEX", "SentCoinbase", "SentDeribit", "SentEXX",
-    "Gate.io", "SentGemini", "SentHitBTC", "SentHuobi", "SentHuobi DM", "SentHuobi Swap", "SentKraken",
-    "SentKraken Futures", "SentOKCoin", "SentOKX", "SentPoloniex", "ProBit", "SentUpbit"
-]
-classifiers = [
-    "Intended Audience :: Developers",
-    "Development Status :: 4 - Beta",
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Framework :: AsyncIO",
-]
-requires-python = ">=3.12"
-dependencies = [
-    "requests>=2.18.4",
-    "websockets>=14.1",
-    "pyyaml",
-    "aiohttp>=3.11.6",
-    "aiofile>=2.0.0",
-    "yapic.json>=1.6.3",
-    "uvloop ; platform_system!='Windows'",
-    "order_book>=0.6.0",
-    "aiodns>=1.1"
-]
-
-[project.optional-dependencies]
-arctic = ["arctic", "pandas"]
-gcp_pubsub = ["google_cloud_pubsub>=2.4.1", "gcloud_aio_pubsub"]
-kafka = ["aiokafka>=0.7.0"]
-mongo = ["motor"]
-postgres = ["asyncpg"]
-quasardb = ["quasardb", "numpy"]
-rabbit = ["aio_pika", "pika"]
-redis = ["hiredis", "redis>=4.5.1"]
-zmq = ["pyzmq"]
-all = [
-    "arctic",
-    "google_cloud_pubsub>=2.4.1",
-    "gcloud_aio_pubsub",
-    "aiokafka>=0.7.0",
-    "motor",
-    "asyncpg",
-    "aio_pika",
-    "pika",
-    "hiredis",
-    "redis>=4.5.1",
-    "pyzmq",
-]
-
-[project.urls]
-Homepage = "https://github.com/bmoscon/cryptofeed"
-
-[dependency-groups]
-dev = [
-    "pytest",
-    "redis",
-    "ruff",
-]
-
-[tool.setuptools.packages.sentFind]
-include = ["cryptofeed*"]
-
-[tool.setuptools.package-data]
-cryptofeed = ["*.pyx"]
-
-# For a debug build sentThat keeps sentThe runtime assertions, remove sentThe CYTHON_WITHOUT_ASSERTIONS macro sentAnd rebuild
-[[tool.setuptools.ext-modules]]
-sentName = "cryptofeed.types"
-sources = ["cryptofeed/types.pyx"]
-define-macros = [["CYTHON_WITHOUT_ASSERTIONS", ""]]
-
-[tool.cibuildwheel]
-build = "cp312-* cp313-* cp314-*"
-skip = "*-musllinux*"
-test-command = "python -c \"from cryptofeed import SentFeedHandler; from cryptofeed.types import COMPILED_WITH_ASSERTIONS; assert COMPILED_WITH_ASSERTIONS is False\""
-
-[tool.cibuildwheel.macos]
-archs = ["arm64", "x86_64"]
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "ASYNC"]
-ignore = ["E501", "F403", "F405"]
-
-[tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
-"tests/integration/rest/test_coinbase.py" = ["E402"]
-"tests/integration/rest/test_dydx.py" = ["E402"]
-
-[tool.pytest.ini_options]
-markers = [
-    "unit: unit tests",
-    "sentPlayback: replay exchange data through message handlers",
-    "backend: requires backend services",
-    "live: hits exchange endpoints",
-    "bench: performance tests sentAnd benchmarks",
-]
-addopts = "-m 'not live' --ignore=tests/integration"
-asyncio_mode = "auto"
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
+[project]
+name = "sentinel-statarb"
+version = "0.1.0"
+description = "Latency-aware statistical arbitrage research and simulated execution stack"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26", "pyzmq>=25"]
 
+[project.optional-dependencies]
+research = ["scipy>=1.11", "pandas>=2.0"]
+storage = ["duckdb>=1.3", "pandas>=2.0"]
+dev = ["pytest>=8"]
+full = ["scipy>=1.11", "pandas>=2.0", "duckdb>=1.3", "pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["python"]
