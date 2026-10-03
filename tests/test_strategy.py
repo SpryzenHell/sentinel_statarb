@@ -3,7 +3,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "python"))
 
-from sentinel_statarb.strategy import DynamicDebouncer, OCOBracket
+from sentinel_statarb.strategy import DynamicDebouncer, KalmanHedge, OCOBracket
+import numpy as np
 
 
 def test_dynamic_debouncer_requires_more_confirmation_in_high_vol():
@@ -21,3 +22,13 @@ def test_oco_is_one_shot_and_uses_five_bps():
     assert bracket.check_stop(99.90)
     assert not bracket.active
     assert not bracket.check_stop(99.0)
+
+
+def test_kalman_hedge_tracks_stable_ratio():
+    rng = np.random.default_rng(11)
+    x = np.linspace(90.0, 110.0, 500)
+    y = 1.25 * x + rng.normal(0.0, 0.02, size=x.size)
+    kf = KalmanHedge(beta0=1.0, process_var=1e-6, meas_var=1e-2)
+    for xi, yi in zip(x, y):
+        beta = kf.update(float(xi), float(yi))
+    assert abs(beta - 1.25) < 0.01
