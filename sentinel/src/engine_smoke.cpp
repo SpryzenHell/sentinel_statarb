@@ -16,7 +16,7 @@ static void require(bool ok, const char* msg) {
 }
 
 int main() {
-  sentinel::ExecutionEngine engine({1.0, 0.0, 5.0, 250.0});
+  sentinel::ExecutionEngine engine({1.0, 0.0, 5.0, 5.0, 250.0});
 
   const auto ts = now_ns();
   sentinel::TickMessage tick{};
@@ -47,7 +47,11 @@ int main() {
   tick.bid_a = 99.0;
   tick.ask_a = 99.01;
   engine.on_tick(tick);
-  require(engine.check_oco(report), "OCO stop did not trigger");
+  require(!engine.check_oco(report), "OCO should not fill below the limit");
+  tick.bid_a = 99.75;
+  tick.ask_a = 99.76;
+  engine.on_tick(tick);
+  require(engine.check_oco(report), "OCO limit did not fill after recovery");
   require(report.status == 3, "OCO status wrong");
   require(engine.state().position_a == 0.0, "position not flattened");
   require(engine.state().stop_events == 1, "stop counter wrong");
