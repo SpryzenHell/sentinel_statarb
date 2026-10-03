@@ -25,6 +25,7 @@ def pack_order(order_id: int, side: int, ts_ns: int) -> bytes:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--orders", type=int, default=10_000)
+    parser.add_argument("--cpu", type=int, default=-1)
     args = parser.parse_args()
 
     exe = ROOT / "build" / "sentinel" / "sentinel_exec"
@@ -33,8 +34,10 @@ def main() -> None:
 
     endpoint = f"ipc:///tmp/sentinel_e2e_{os.getpid()}"
     reports_endpoint = endpoint + ".reports"
+    command = [str(exe), endpoint]
+    if args.cpu >= 0: command += ["--cpu", str(args.cpu)]
     proc = subprocess.Popen(
-        [str(exe), endpoint],
+        command,
         stderr=subprocess.PIPE,
         text=True,
     )
