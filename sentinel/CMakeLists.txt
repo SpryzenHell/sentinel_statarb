@@ -40,11 +40,17 @@ target_link_libraries(sentinel_exec PRIVATE sentinel_core ${LIBZMQ_LIBRARIES})
 
   add_executable(sentinel_zmq_bench src/zmq_latency_bench.cpp)
   target_include_directories(sentinel_zmq_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${LIBZMQ_INCLUDE_DIRS})
+
+  add_executable(sentinel_zmq_oneway src/zmq_oneway_latency_bench.cpp)
+  target_link_directories(sentinel_zmq_oneway PRIVATE ${LIBZMQ_LIBRARY_DIRS})
+  target_link_libraries(sentinel_zmq_oneway PRIVATE ${LIBZMQ_LIBRARIES})
+  target_compile_options(sentinel_zmq_oneway PRIVATE ${LIBZMQ_CFLAGS_OTHER} -O3 -march=native -Wall -Wextra -Wpedantic)
   target_link_directories(sentinel_zmq_bench PRIVATE ${LIBZMQ_LIBRARY_DIRS})
   target_link_libraries(sentinel_zmq_bench PRIVATE ${LIBZMQ_LIBRARIES})
   target_compile_options(sentinel_zmq_bench PRIVATE ${LIBZMQ_CFLAGS_OTHER} -O3 -march=native)
 
   add_test(NAME sentinel_zmq_bench COMMAND sentinel_zmq_bench 1000)
+  add_test(NAME sentinel_zmq_oneway COMMAND sentinel_zmq_oneway 1000)
 else()
   message(WARNING "libzmq development headers not found; ZeroMQ targets/tests are skipped")
 endif()
