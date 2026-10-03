@@ -92,6 +92,7 @@ class OCOBracket:
     stop_bps: float = 5.0
     limit_bps: float = 5.0
     active: bool = True
+    stop_triggered: bool = False
 
     def __post_init__(self) -> None:
         adverse = self.reference_notional * self.stop_bps * 1e-4
@@ -104,12 +105,22 @@ class OCOBracket:
     def check_stop(self, spread: float) -> bool:
         if not self.active:
             return False
+
         hit = spread <= self.stop_price if self.side > 0 else spread >= self.stop_price
-        if hit:
-            self.exit_reason = "oco_stop_limit"
-            self.active = False
-            return True
-        return False
+        if not self.stop_triggered:
+            if not hit:
+                return False
+            self.stop_triggered = True
+            self.exit_reason = "oco_stop_triggered"
+
+        # After the trigger, the stop-limit becomes a resting limit.
+        marketable = spread >= self.limit_price if self.side > 0 else spread <= self.limit_price
+        if not marketable:
+            return False
+
+        self.exit_reason = "oco_stop_limit"
+        self.active = False
+        return True
 
     def cancel_other(self, reason: str = "mean_reversion") -> None:
         self.exit_reason = reason
@@ -151,12 +162,12 @@ class PairStrategy:
                 self.exits += 1
                 self.stop_exits += 1
                 self.bracket = None
-            elif abs(z) < self.exit_z:
+            elif not self.bracket.stop_triggered and abs(z) < self.exit_z:
                 self.bracket.cancel_other()
                 self.position = 0
                 self.exits += 1
                 self.bracket = None
-            return Signal(0, z, beta, self.debouncer.required(tick.volatility))
+            return Signal(self.position, z, beta, self.debouncer.required(tick.volatility))
 
         desired = -1 if z >= self.entry_z else (1 if z <= -self.entry_z else 0)
         confirmed, required = self.debouncer.update(desired, tick.volatility)
