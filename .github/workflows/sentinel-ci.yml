@@ -50,6 +50,9 @@ jobs:
       - name: Strategy to C++ execution replay
         run: python scripts/run_replay.py --ticks 5000
 
+      - name: Connected telemetry -> DuckDB smoke test
+        run: python scripts/benchmark_telemetry.py --ticks 100000 --batch 10000
+
       - name: ZeroMQ transport latency
         run: ./build/sentinel/sentinel_zmq_bench 10000 | tee results/zmq_latency.txt
 
