@@ -25,6 +25,7 @@ def test_portfolio_uses_two_leg_cash_accounting_and_costs():
     assert p.position_b < 0.0
     assert p.turnover > 0.0
     assert p.fees > 0.0
+    assert p.spread_cost > 0.0
     assert p.slippage_cost > 0.0
     assert p.max_gross_exposure == pytest.approx(10_000.0, rel=0.01)
 
@@ -52,6 +53,7 @@ def test_backtest_accounts_for_execution_costs():
 
     assert costly.turnover == pytest.approx(free.turnover, rel=0.05, abs=1e-6)
     assert costly.fees > free.fees
+    assert costly.spread_cost == pytest.approx(free.spread_cost, rel=1e-9, abs=1e-9)
     assert costly.slippage_cost > free.slippage_cost
     assert costly.pnl < free.pnl
 
