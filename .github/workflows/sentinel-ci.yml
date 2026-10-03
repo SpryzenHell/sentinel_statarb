@@ -60,6 +60,9 @@ jobs:
       - name: Connected telemetry -> DuckDB smoke test
         run: python scripts/benchmark_telemetry.py --ticks 100000 --batch 10000
 
+      - name: ZeroMQ one-way IPC latency
+        run: ./build/sentinel/sentinel_zmq_oneway 200000 -1 -1 | tee results/zmq_oneway_latency.txt
+
       - name: ZeroMQ transport latency
         run: ./build/sentinel/sentinel_zmq_bench 10000 | tee results/zmq_latency.txt
 
