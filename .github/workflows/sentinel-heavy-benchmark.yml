@@ -1,0 +1,50 @@
+name: Sentinel Heavy Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      ticks:
+        description: "Telemetry ticks to replay"
+        required: false
+        default: "10000000"
+      cpu:
+        description: "Execution CPU to pin (-1 disables pinning)"
+        required: false
+        default: "-1"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev pkg-config
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[full]'
+
+      - name: Host profile
+        run: mkdir -p results && python scripts/system_profile.py | tee results/heavy_system_profile.json
+
+      - name: Build C++
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel
+
+      - name: End-to-end telemetry benchmark
+        run: python scripts/benchmark_telemetry.py --ticks ${{ inputs.ticks }} --batch 100000 --cpu ${{ inputs.cpu }}
+
+      - name: Direct engine benchmark
+        run: ./build/sentinel/sentinel_engine_bench 200000 --cpu ${{ inputs.cpu }}
+
+      - name: Upload heavy benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-heavy-benchmark
+          path: results/
