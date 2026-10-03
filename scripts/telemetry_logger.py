@@ -44,10 +44,12 @@ def main() -> None:
     started = time.perf_counter()
     ticks_received = 0
     reports_received = 0
+    ticks_written = 0
+    reports_written = 0
     lock = threading.Lock()
 
     def writer() -> None:
-        nonlocal ticks_received, reports_received
+        nonlocal ticks_written, reports_written
         tick_batch = []
         report_batch = []
         while True:
@@ -56,8 +58,10 @@ def main() -> None:
                 work.task_done()
                 if tick_batch:
                     con.executemany('INSERT INTO ticks VALUES (?, ?, ?, ?, ?, ?, ?)', tick_batch)
+                    ticks_written += len(tick_batch)
                 if report_batch:
                     con.executemany('INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', report_batch)
+                    reports_written += len(report_batch)
                 return
             kind, payload = item
             if kind == 'tick':
@@ -66,11 +70,11 @@ def main() -> None:
                 report_batch.append(payload)
             if len(tick_batch) >= args.batch:
                 con.executemany('INSERT INTO ticks VALUES (?, ?, ?, ?, ?, ?, ?)', tick_batch)
-                with lock: ticks_received += len(tick_batch)
+                with lock: ticks_written += len(tick_batch)
                 tick_batch.clear()
             if len(report_batch) >= args.batch:
                 con.executemany('INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', report_batch)
-                with lock: reports_received += len(report_batch)
+                with lock: reports_written += len(report_batch)
                 report_batch.clear()
             work.task_done()
 
@@ -85,23 +89,23 @@ def main() -> None:
         if len(message) == TICK_SIZE:
             _, seq, ts_ns, bid_a, ask_a, bid_b, ask_b, volatility = struct.unpack(TICK_FMT, message)
             work.put(('tick', (seq, ts_ns, bid_a, ask_a, bid_b, ask_b, volatility)))
+            ticks_received += 1
         elif len(message) == REPORT_SIZE:
             _, side, status, oid, ts_ns, fill_a, fill_b, qty, spread, stop_spread, limit_spread = struct.unpack(REPORT_FMT, message)
             work.put(('report', (oid, status, ts_ns, fill_a, fill_b, qty, spread, stop_spread, limit_spread)))
+            reports_received += 1
         else:
             continue
 
-        with lock:
-            total_ticks = ticks_received
-        if args.expected_ticks and total_ticks >= args.expected_ticks:
+        if args.expected_ticks and ticks_received >= args.expected_ticks:
             break
 
     work.put(stop)
     work.join()
     thread.join()
     with lock:
-        final_ticks = ticks_received
-        final_reports = reports_received
+        final_ticks = ticks_written
+        final_reports = reports_written
     elapsed = time.perf_counter() - started
     con.close()
     sock.close(0)
