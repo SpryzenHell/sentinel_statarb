@@ -31,7 +31,7 @@ void print_stats(const sentinel::EngineState& s) {
 }
 
 int main(int argc, char** argv) {
-  const std::string endpoint = (argc > 1 && argv[1][0] != ' -') ? argv[1] : "ipc:///tmp/sentinel_exec_in.ipc";
+  const std::string endpoint = (argc > 1 && argv[1][0] != '-') ? argv[1] : "ipc:///tmp/sentinel_exec_in.ipc";
   sentinel::RuntimeProfile runtime{};
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
