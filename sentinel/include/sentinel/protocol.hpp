@@ -45,6 +45,8 @@ struct ReportMessage {
   double fill_b;
   double qty;
   double spread;
+  double oco_stop_spread;
+  double oco_limit_spread;
 };
 #pragma pack(pop)
 
