@@ -6,14 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "sentinel-statarb"
 version = "0.1.0"
 description = "Latency-aware statistical arbitrage research and simulated execution stack"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = ["numpy>=1.26", "pyzmq>=25"]
 
 [project.optional-dependencies]
 research = ["scipy>=1.11", "pandas>=2.0"]
+live = ["cryptofeed>=3.0.0"]
 storage = ["duckdb>=1.3", "pandas>=2.0"]
 dev = ["pytest>=8"]
-full = ["scipy>=1.11", "pandas>=2.0", "duckdb>=1.3", "pytest>=8"]
+full = ["scipy>=1.11", "pandas>=2.0", "duckdb>=1.3", "cryptofeed>=3.0.0", "pytest>=8"]
 
 [tool.setuptools.packages.find]
 where = ["python"]
