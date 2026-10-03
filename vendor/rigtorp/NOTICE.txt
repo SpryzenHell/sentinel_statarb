@@ -1,0 +1,4 @@
+Rigtorp SPSCQueue is the upstream inspiration for the queue boundary used in Sentinel.
+
+Upstream: https://github.com/rigtorp/SPSCQueue
+License: MIT. See the upstream repository for the original license text.
