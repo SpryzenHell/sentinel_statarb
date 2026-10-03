@@ -20,6 +20,7 @@ def main() -> None:
     ap.add_argument('--ticks', type=int, default=100_000)
     ap.add_argument('--batch', type=int, default=100_000)
     ap.add_argument('--db', default='results/telemetry.duckdb')
+    ap.add_argument('--cpu', type=int, default=-1)
     args = ap.parse_args()
 
     exe = ROOT / 'build' / 'sentinel' / 'sentinel_exec'
@@ -35,7 +36,10 @@ def main() -> None:
          '--batch', str(args.batch), '--db', args.db],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
     )
-    proc = subprocess.Popen([str(exe), endpoint], stderr=subprocess.PIPE, text=True)
+    command = [str(exe), endpoint]
+    if args.cpu >= 0:
+        command += ['--cpu', str(args.cpu)]
+    proc = subprocess.Popen(command, stderr=subprocess.PIPE, text=True)
 
     ready = logger.stdout.readline().strip() if logger.stdout else ''
     if ready != 'READY':
