@@ -28,6 +28,7 @@ class BacktestResult:
     max_drawdown: float
     flash_crash_loss: float
     fees: float
+    spread_cost: float
     slippage_cost: float
     turnover: float
     max_gross_exposure: float
@@ -53,6 +54,7 @@ class PaperPortfolio:
         self.position_a = 0.0
         self.position_b = 0.0
         self.fees = 0.0
+        self.spread_cost = 0.0
         self.slippage_cost = 0.0
         self.turnover = 0.0
         self.trade_count = 0
@@ -84,7 +86,8 @@ class PaperPortfolio:
             return
         mid = self._mid(bid, ask)
         slip = self.config.slippage_bps * 1e-4
-        price = ask * (1.0 + slip) if side > 0 else bid * (1.0 - slip)
+        quote_price = ask if side > 0 else bid
+        price = quote_price * (1.0 + slip) if side > 0 else quote_price * (1.0 - slip)
 
         notional = qty * price
         fee = notional * self.config.commission_bps * 1e-4
@@ -92,7 +95,8 @@ class PaperPortfolio:
         self.cash -= fee
         self.fees += fee
         self.turnover += notional
-        self.slippage_cost += qty * abs(price - mid)
+        self.spread_cost += qty * abs(quote_price - mid)
+        self.slippage_cost += qty * abs(price - quote_price)
 
     def enter_spread(self, side: int, beta: float, tick: Tick) -> float:
         if side not in (-1, 1):
@@ -105,8 +109,6 @@ class PaperPortfolio:
         mid_a = self._mid(tick.bid_a, tick.ask_a)
         mid_b = self._mid(tick.bid_b, tick.ask_b)
         qty_a = self.config.target_gross_notional / (mid_a + abs(beta) * mid_b)
-        qty_b = abs(beta) * qty_a
-
         target_a = side * qty_a
         target_b = -side * beta * qty_a
 
@@ -226,6 +228,7 @@ def run(
         tick = ticks[-1]
         portfolio.exit_spread(tick)
         trade_pnls.append(portfolio.equity(tick) - open_trade.equity_before_entry)
+        equity_curve[-1] = portfolio.equity(tick)
 
     eq = np.asarray(equity_curve, dtype=float)
     if len(eq) == 0:
@@ -255,6 +258,7 @@ def run(
         max_drawdown=drawdown,
         flash_crash_loss=float(flash_crash_loss),
         fees=float(portfolio.fees),
+        spread_cost=float(portfolio.spread_cost),
         slippage_cost=float(portfolio.slippage_cost),
         turnover=float(portfolio.turnover),
         max_gross_exposure=float(portfolio.max_gross_exposure),
