@@ -38,6 +38,9 @@ jobs:
       - name: Strategy backtest
         run: python scripts/run_backtest.py
 
+      - name: C++ engine latency benchmark
+        run: ./build/sentinel/sentinel_engine_bench | tee results/engine_latency.txt
+
       - name: C++ SPSC benchmark
         run: ./build/sentinel/sentinel_spsc_bench | tee results/spsc_benchmark.txt
 
