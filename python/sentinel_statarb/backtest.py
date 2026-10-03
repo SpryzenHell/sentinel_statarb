@@ -8,7 +8,15 @@ import numpy as np
 from .strategy import PairStrategy, Tick
 
 
-@dataclass
+@dataclass(frozen=True)
+class ExecutionConfig:
+    initial_cash: float = 1_000_000.0
+    target_gross_notional: float = 10_000.0
+    commission_bps: float = 0.40
+    slippage_bps: float = 1.00
+
+
+@dataclass(frozen=True)
 class BacktestResult:
     label: str
     seed: int
@@ -19,6 +27,114 @@ class BacktestResult:
     pnl: float
     max_drawdown: float
     flash_crash_loss: float
+    fees: float
+    slippage_cost: float
+    turnover: float
+    max_gross_exposure: float
+    max_net_exposure: float
+    winning_trades: int
+    losing_trades: int
+    win_rate: float
+    avg_trade_pnl: float
+
+
+class PaperPortfolio:
+    """Two-leg cash-and-position accounting for the A/B spread."""
+
+    def __init__(self, config: ExecutionConfig):
+        if config.initial_cash <= 0.0:
+            raise ValueError("initial_cash must be positive")
+        if config.target_gross_notional <= 0.0:
+            raise ValueError("target_gross_notional must be positive")
+        if config.commission_bps < 0.0 or config.slippage_bps < 0.0:
+            raise ValueError("cost parameters must be non-negative")
+        self.config = config
+        self.cash = config.initial_cash
+        self.position_a = 0.0
+        self.position_b = 0.0
+        self.fees = 0.0
+        self.slippage_cost = 0.0
+        self.turnover = 0.0
+        self.trade_count = 0
+        self.max_gross_exposure = 0.0
+        self.max_net_exposure = 0.0
+
+    @staticmethod
+    def _mid(bid: float, ask: float) -> float:
+        if not (np.isfinite(bid) and np.isfinite(ask) and bid > 0.0 and ask >= bid):
+            raise ValueError("invalid market quote")
+        return 0.5 * (bid + ask)
+
+    def equity(self, tick: Tick) -> float:
+        mid_a = self._mid(tick.bid_a, tick.ask_a)
+        mid_b = self._mid(tick.bid_b, tick.ask_b)
+        return self.cash + self.position_a * mid_a + self.position_b * mid_b
+
+    def exposures(self, tick: Tick) -> tuple[float, float]:
+        mid_a = self._mid(tick.bid_a, tick.ask_a)
+        mid_b = self._mid(tick.bid_b, tick.ask_b)
+        gross = abs(self.position_a * mid_a) + abs(self.position_b * mid_b)
+        net = abs(self.position_a * mid_a + self.position_b * mid_b)
+        self.max_gross_exposure = max(self.max_gross_exposure, gross)
+        self.max_net_exposure = max(self.max_net_exposure, net)
+        return gross, net
+
+    def _fill_leg(self, side: int, qty: float, bid: float, ask: float) -> None:
+        if qty <= 0.0:
+            return
+        mid = self._mid(bid, ask)
+        slip = self.config.slippage_bps * 1e-4
+        price = ask * (1.0 + slip) if side > 0 else bid * (1.0 - slip)
+
+        notional = qty * price
+        fee = notional * self.config.commission_bps * 1e-4
+        self.cash -= side * notional
+        self.cash -= fee
+        self.fees += fee
+        self.turnover += notional
+        self.slippage_cost += qty * abs(price - mid)
+
+    def enter_spread(self, side: int, beta: float, tick: Tick) -> float:
+        if side not in (-1, 1):
+            raise ValueError("spread entry side must be -1 or +1")
+        if beta == 0.0 or not np.isfinite(beta):
+            raise ValueError("beta must be finite and non-zero")
+        if self.position_a != 0.0 or self.position_b != 0.0:
+            raise ValueError("cannot enter while already positioned")
+
+        mid_a = self._mid(tick.bid_a, tick.ask_a)
+        mid_b = self._mid(tick.bid_b, tick.ask_b)
+        qty_a = self.config.target_gross_notional / (mid_a + abs(beta) * mid_b)
+        qty_b = abs(beta) * qty_a
+
+        target_a = side * qty_a
+        target_b = -side * beta * qty_a
+
+        self._fill_leg(1 if target_a > 0.0 else -1, abs(target_a), tick.bid_a, tick.ask_a)
+        self._fill_leg(1 if target_b > 0.0 else -1, abs(target_b), tick.bid_b, tick.ask_b)
+        self.position_a = target_a
+        self.position_b = target_b
+        self.trade_count += 1
+        self.exposures(tick)
+        return self.equity(tick)
+
+    def exit_spread(self, tick: Tick) -> float:
+        if self.position_a == 0.0 and self.position_b == 0.0:
+            return self.equity(tick)
+
+        close_a = -self.position_a
+        close_b = -self.position_b
+        self._fill_leg(1 if close_a > 0.0 else -1, abs(close_a), tick.bid_a, tick.ask_a)
+        self._fill_leg(1 if close_b > 0.0 else -1, abs(close_b), tick.bid_b, tick.ask_b)
+        self.position_a = 0.0
+        self.position_b = 0.0
+        self.exposures(tick)
+        return self.equity(tick)
+
+
+@dataclass
+class _OpenTrade:
+    equity_before_entry: float
 
 
 def generate_path(
@@ -26,6 +142,8 @@ def generate_path(
     n: int = 50_000,
     crash_at: int | None = None,
 ) -> List[Tick]:
+    if n <= 0:
+        raise ValueError("n must be positive")
     rng = np.random.default_rng(seed)
     common = rng.normal(0, 0.0007, n)
     a_noise = rng.normal(0, 0.0009, n)
@@ -39,6 +157,8 @@ def generate_path(
         log_b[i] = log_b[i - 1] + common[i] + b_noise[i]
 
     if crash_at is not None:
+        if not 0 <= crash_at < n:
+            raise ValueError("crash_at must be inside the generated path")
         pre0 = max(0, crash_at - 30)
         log_a[pre0:crash_at] += np.linspace(0.0, 0.006, crash_at - pre0)
         end = min(n, crash_at + 20)
@@ -69,55 +189,78 @@ def run(
     n: int = 50_000,
     crash_at: int = 25_000,
     dynamic: bool = True,
+    execution: ExecutionConfig | None = None,
 ) -> BacktestResult:
     ticks = generate_path(seed, n, crash_at)
     strategy = PairStrategy()
-
     if not dynamic:
         strategy.debouncer.base = 1
         strategy.debouncer.max_confirmations = 1
         strategy.debouncer.reference_vol = 1.0
 
-    cash = 0.0
-    position = 0
-    entry = 0.0
-    equity = []
-    crash_equity = 0.0
+    portfolio = PaperPortfolio(execution or ExecutionConfig())
+    equity_curve: list[float] = []
+    trade_pnls: list[float] = []
+    open_trade: _OpenTrade | None = None
 
-    for idx, tick in enumerate(ticks):
+    for tick in ticks:
+        previous_position = strategy.position
         strategy.update(tick)
-        mid_a = 0.5 * (tick.bid_a + tick.ask_a)
-        mid_b = 0.5 * (tick.bid_b + tick.ask_b)
-        spread = mid_a - strategy.beta.beta * mid_b
+        current_position = strategy.position
 
-        if position == 0 and strategy.position != 0:
-            position = strategy.position
-            entry = spread
-        elif position != 0 and strategy.position == 0:
-            cash += -position * (spread - entry)
-            position = 0
+        if previous_position == 0 and current_position != 0:
+            before = portfolio.equity(tick)
+            portfolio.enter_spread(current_position, strategy.beta.beta, tick)
+            open_trade = _OpenTrade(before)
 
-        mtm = cash - position * (spread - entry if position else 0.0)
-        equity.append(mtm)
+        elif previous_position != 0 and current_position == 0:
+            portfolio.exit_spread(tick)
+            if open_trade is not None:
+                trade_pnls.append(portfolio.equity(tick) - open_trade.equity_before_entry)
+            open_trade = None
 
-        if idx == crash_at:
-            crash_equity = mtm
+        portfolio.exposures(tick)
+        equity_curve.append(portfolio.equity(tick))
 
-    if position:
-        cash += -position * (spread - entry)
+    if open_trade is not None:
+        tick = ticks[-1]
+        portfolio.exit_spread(tick)
+        trade_pnls.append(portfolio.equity(tick) - open_trade.equity_before_entry)
 
-    eq = np.asarray(equity)
+    eq = np.asarray(equity_curve, dtype=float)
+    if len(eq) == 0:
+        raise RuntimeError("backtest produced no equity observations")
+
     peak = np.maximum.accumulate(eq)
     drawdown = float(np.min(eq - peak))
 
+    anchor_idx = min(max(crash_at, 0), len(eq) - 1)
+    pre_crash_equity = float(eq[max(0, anchor_idx - 1)])
+    crash_end = min(len(eq), anchor_idx + 46)
+    crash_low = float(np.min(eq[anchor_idx:crash_end]))
+    flash_crash_loss = max(0.0, pre_crash_equity - crash_low)
+
+    wins = sum(1 for pnl in trade_pnls if pnl > 0.0)
+    losses = sum(1 for pnl in trade_pnls if pnl < 0.0)
+    total_pnl = portfolio.equity(ticks[-1]) - portfolio.config.initial_cash
+
     return BacktestResult(
-        "dynamic" if dynamic else "baseline",
-        seed,
-        n,
-        strategy.entries,
-        strategy.exits,
-        strategy.stop_exits,
-        float(cash),
-        drawdown,
-        float(crash_equity),
+        label="dynamic" if dynamic else "baseline",
+        seed=seed,
+        ticks=n,
+        trades_entered=portfolio.trade_count,
+        exits=len(trade_pnls),
+        stop_exits=strategy.stop_exits,
+        pnl=float(total_pnl),
+        max_drawdown=drawdown,
+        flash_crash_loss=float(flash_crash_loss),
+        fees=float(portfolio.fees),
+        slippage_cost=float(portfolio.slippage_cost),
+        turnover=float(portfolio.turnover),
+        max_gross_exposure=float(portfolio.max_gross_exposure),
+        max_net_exposure=float(portfolio.max_net_exposure),
+        winning_trades=wins,
+        losing_trades=losses,
+        win_rate=float(wins / len(trade_pnls)) if trade_pnls else 0.0,
+        avg_trade_pnl=float(np.mean(trade_pnls)) if trade_pnls else 0.0,
     )
