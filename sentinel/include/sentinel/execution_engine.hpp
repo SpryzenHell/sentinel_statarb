@@ -10,6 +10,7 @@ struct EngineConfig {
   double hedge_ratio{1.0};
   double slippage_bps{1.0};
   double oco_stop_bps{5.0};
+  double oco_limit_bps{5.0};
   double max_quote_age_us{250.0};
 };
 
@@ -44,6 +45,7 @@ class ExecutionEngine {
   TickMessage last_tick_{};
   bool have_quote_{false};
   bool oco_active_{false};
+  bool stop_triggered_{false};
   Side open_side_{Side::kBuy};
   double entry_spread_{0.0};
   double stop_spread_{0.0};
