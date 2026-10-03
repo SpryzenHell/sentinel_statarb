@@ -1,4 +1,5 @@
-#include "sentinel/spsc_ring.hpp"
+#include <rigtorp/SPSCQueue.h>
+#include <atomic>
 
 #include <chrono>
 #include <cstdint>
@@ -11,7 +12,7 @@ struct Item {
 };
 
 int main() {
-  sentinel::SpscRing<Item, 1 << 16> q;
+  rigtorp::SPSCQueue<Item> q(1 << 16);
   constexpr std::uint64_t N = 5'000'000;
   std::uint64_t checksum = 0;
 
@@ -26,7 +27,7 @@ int main() {
 
   for (std::uint64_t i = 0; i < N; ++i) {
     Item item{i, 1.0};
-    while (!q.try_emplace(item)) {}
+    q.emplace(item);
   }
 
   consumer.join();
