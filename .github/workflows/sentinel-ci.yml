@@ -42,6 +42,9 @@ jobs:
       - name: Strategy backtest
         run: python scripts/run_backtest.py
 
+      - name: Backtest sensitivity smoke test
+        run: python scripts/sensitivity_backtest.py --ticks 10000 --crash-at 5000 --cost-pairs '0:0,0.4:1,5:5'
+
       - name: Linux host profile
         run: python scripts/system_profile.py | tee results/system_profile.json
 
