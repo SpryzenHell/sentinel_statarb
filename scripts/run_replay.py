@@ -16,7 +16,7 @@ from sentinel_statarb.backtest import generate_path
 from sentinel_statarb.strategy import PairStrategy
 
 TICK_FMT = "<BQQddddd"
-ORDER_FMT = "<BbHQd"
+ORDER_FMT = "<BbHQQd"
 
 def pack_tick(tick, seq):
     return struct.pack(TICK_FMT, 1, seq, tick.ts_ns, tick.bid_a, tick.ask_a, tick.bid_b, tick.ask_b, tick.volatility)
