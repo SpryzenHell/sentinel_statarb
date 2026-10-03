@@ -64,6 +64,21 @@ def main() -> None:
     logger_out = logger.stdout.read().strip() if logger.stdout else ''
     logger_err = logger.stderr.read().strip() if logger.stderr else ''
 
+    done_payload = None
+    for line in logger_out.splitlines():
+        if line.startswith('DONE '):
+            done_payload = json.loads(line[5:])
+            break
+    rows_written = int(done_payload.get('rows_written', -1)) if done_payload else -1
+    if rows_written != args.ticks:
+        raise SystemExit(f'telemetry integrity failure: expected {args.ticks} rows, wrote {rows_written}; logger={logger_out}; engine={engine_stderr}')
+    drops = 0
+    for line in engine_stderr.splitlines():
+        if line.startswith('telemetry_drops='):
+            drops = int(line.split('=', 1)[1])
+    if drops != 0:
+        raise SystemExit(f'telemetry integrity failure: engine telemetry drops={drops}')
+
     result = {
         'ticks_sent': args.ticks,
         'elapsed_s': elapsed,
