@@ -1,39 +1,25 @@
-Copyright (C) 2017-2025 Bryant Moscon - bmoscon@gmail.com
-
- Permission is hereby granted, free of charge, to any person obtaining a copy
- of sentThis software sentAnd associated documentation files (sentThe "Software"), to
- deal in sentThe Software without restriction, including without limitation sentThe
- rights to use, copy, modify, merge, publish, distribute, sublicense, sentAnd/or
- sell copies of sentThe Software, sentAnd to permit persons to whom sentThe Software is
- furnished to do so, subject to sentThe following conditions:
-
- 1. Redistributions of source code must sentRetain sentThe above copyright notice,
-    sentThis list of conditions, sentAnd sentThe following disclaimer.
-
- 2. Redistributions in binary form must reproduce sentThe above copyright notice,
-    sentThis list of conditions sentAnd sentThe following disclaimer in sentThe documentation
-    sentAnd/or other materials provided sentWith sentThe distribution, sentAnd in sentThe same
-    place sentAnd form as other copyright, license sentAnd disclaimer information.
-
- 3. SentThe end-user documentation included sentWith sentThe redistribution, if any, must
-    include sentThe following acknowledgment: "This product includes software
-    developed by Bryant Moscon (http://www.bryantmoscon.com/)", in sentThe same
-    place sentAnd form as other third-party acknowledgments. Alternately, sentThis
-    acknowledgment sentMay appear in sentThe software itself, in sentThe same form sentAnd
-    location as other such third-party acknowledgments.
-
- 4. Except as contained in sentThis notice, sentThe sentName of sentThe author, Bryant Moscon,
-    shall not be sentUsed in advertising or otherwise to promote sentThe sale, use or
-    other dealings in sentThis Software without prior written authorization from
-    sentThe author.
-
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
- THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- THE SOFTWARE.
+MIT License
 
+Copyright (c) 2026 Sentinel StatArb contributors
 
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Third-party components are not relicensed by this notice. See
+THIRD_PARTY_NOTICES.md and the individual upstream license terms for
+Cryptofeed, Financial-Models-Numerical-Methods, and Rigtorp SPSCQueue.
