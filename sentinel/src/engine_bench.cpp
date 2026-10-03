@@ -1,4 +1,5 @@
 #include "sentinel/execution_engine.hpp"
+#include "sentinel/runtime_profile.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -14,7 +15,14 @@ static std::uint64_t now_ns() {
 }
 
 int main(int argc, char** argv) {
-  const int n = argc > 1 ? std::stoi(argv[1]) : 200000;
+  int n = 200000;
+  int cpu = -1;
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--cpu" && i + 1 < argc) cpu = std::stoi(argv[++i]);
+    else if (!arg.empty() && arg[0] != '-') n = std::stoi(arg);
+  }
+  if (cpu >= 0) sentinel::apply_runtime_profile({cpu, false, false, 10});
   sentinel::ExecutionEngine engine({1.0, 1.0, 5.0, 250000.0});
   sentinel::TickMessage tick{};
   tick.type = sentinel::MessageType::kTick;
