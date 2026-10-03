@@ -129,12 +129,16 @@ class OCOBracket:
 
 class PairStrategy:
     def __init__(self, entry_z: float = 2.0, exit_z: float = 0.5, window: int = 200):
+        if window < 2:
+            raise ValueError("window must be at least 2")
         self.entry_z = entry_z
         self.exit_z = exit_z
         self.window = window
         self.beta = KalmanHedge()
         self.debouncer = DynamicDebouncer()
         self.spreads: deque[float] = deque(maxlen=window)
+        self.rolling_sum = 0.0
+        self.rolling_sumsq = 0.0
         self.position = 0
         self.bracket: OCOBracket | None = None
         self.entries = 0
@@ -142,20 +146,35 @@ class PairStrategy:
         self.stop_exits = 0
         self.last_exit_reason: str | None = None
 
+    def _append_spread(self, spread: float) -> None:
+        if len(self.spreads) == self.window:
+            old = self.spreads.popleft()
+            self.rolling_sum -= old
+            self.rolling_sumsq -= old * old
+        self.spreads.append(spread)
+        self.rolling_sum += spread
+        self.rolling_sumsq += spread * spread
+
+    def _rolling_stats(self) -> tuple[float, float]:
+        n = len(self.spreads)
+        if n < 2:
+            return 0.0, 0.0
+        mean = self.rolling_sum / n
+        variance = (self.rolling_sumsq - self.rolling_sum * mean) / (n - 1)
+        return mean, float(np.sqrt(max(variance, 0.0)))
+
     def update(self, tick: Tick) -> Signal:
         mid_a = 0.5 * (tick.bid_a + tick.ask_a)
         mid_b = 0.5 * (tick.bid_b + tick.ask_b)
         beta = self.beta.update(mid_b, mid_a)
         spread = mid_a - beta * mid_b
-        self.spreads.append(spread)
+        self._append_spread(spread)
         self.last_exit_reason = None
 
         if len(self.spreads) < max(30, self.window // 4):
             return Signal(0, 0.0, beta, self.debouncer.required(tick.volatility))
 
-        arr = np.fromiter(self.spreads, dtype=float)
-        mean = float(arr.mean())
-        sd = float(arr.std(ddof=1))
+        mean, sd = self._rolling_stats()
         z = 0.0 if sd <= 1e-12 else (spread - mean) / sd
 
         if self.bracket is not None:
