@@ -20,6 +20,11 @@ add_executable(sentinel_engine_smoke src/engine_smoke.cpp)
 target_link_libraries(sentinel_engine_smoke PRIVATE sentinel_core)
 target_compile_options(sentinel_engine_smoke PRIVATE -O2 -Wall -Wextra -Wpedantic)
 
+add_executable(sentinel_engine_bench src/engine_bench.cpp)
+target_link_libraries(sentinel_engine_bench PRIVATE sentinel_core)
+target_compile_options(sentinel_engine_bench PRIVATE -O3 -march=native -Wall -Wextra -Wpedantic)
+
+
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
   pkg_check_modules(LIBZMQ QUIET libzmq)
