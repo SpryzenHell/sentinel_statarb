@@ -73,9 +73,10 @@ bool ExecutionEngine::on_order(const OrderMessage& order, ReportMessage& report)
     entry_notional_ = std::abs(0.5 * (last_tick_.bid_a + last_tick_.ask_a))
                     + std::abs(cfg_.hedge_ratio * 0.5 * (last_tick_.bid_b + last_tick_.ask_b));
     const double stop_offset = entry_notional_ * cfg_.oco_stop_bps * 1e-4;
-    const double limit_offset = entry_notional_ * cfg_.oco_stop_bps * 1e-4;
+    const double limit_offset = entry_notional_ * cfg_.oco_limit_bps * 1e-4;
     stop_spread_ = entry_spread_ - static_cast<int>(open_side_) * stop_offset;
     limit_spread_ = stop_spread_ - static_cast<int>(open_side_) * limit_offset;
+    stop_triggered_ = false;
   }
 
   report.oco_stop_spread = stop_spread_;
@@ -91,9 +92,25 @@ bool ExecutionEngine::on_order(const OrderMessage& order, ReportMessage& report)
 
 bool ExecutionEngine::check_oco(ReportMessage& report) {
   if (!oco_active_ || !have_quote_) return false;
+
   const double s = spread();
-  const bool hit = (open_side_ == Side::kBuy) ? (s <= stop_spread_) : (s >= stop_spread_);
-  if (!hit) return false;
+  const bool trigger = (open_side_ == Side::kBuy)
+      ? (s <= stop_spread_)
+      : (s >= stop_spread_);
+
+  if (!stop_triggered_) {
+    if (!trigger) return false;
+    stop_triggered_ = true;
+    ++state_.stop_events;
+  }
+
+  // Once triggered, the stop-limit becomes a resting limit order.
+  // Long-spread exit is a sell: it needs spread >= limit.
+  // Short-spread exit is a buy: it needs spread <= limit.
+  const bool marketable = (open_side_ == Side::kBuy)
+      ? (s >= limit_spread_)
+      : (s <= limit_spread_);
+  if (!marketable) return false;
 
   report = {};
   report.type = MessageType::kReport;
@@ -106,14 +123,14 @@ bool ExecutionEngine::check_oco(ReportMessage& report) {
   report.spread = s;
   report.oco_stop_spread = stop_spread_;
   report.oco_limit_spread = limit_spread_;
-  report.status = 3;  // OCO stop execution
+  report.status = 3;  // OCO stop-limit fill
 
   state_.cash -= state_.position_a * report.fill_a;
   state_.cash += state_.position_b * report.fill_b;
   state_.position_a = 0.0;
   state_.position_b = 0.0;
   oco_active_ = false;
-  ++state_.stop_events;
+  stop_triggered_ = false;
   ++state_.fills;
   return true;
 }
