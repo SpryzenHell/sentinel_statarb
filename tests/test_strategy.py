@@ -1,10 +1,11 @@
 import sys
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).parents[1] / "python"))
 
-from sentinel_statarb.strategy import DynamicDebouncer, KalmanHedge, OCOBracket
-import numpy as np
+from sentinel_statarb.strategy import DynamicDebouncer, KalmanHedge, OCOBracket, PairStrategy
 
 
 def test_dynamic_debouncer_requires_more_confirmation_in_high_vol():
@@ -32,3 +33,15 @@ def test_kalman_hedge_tracks_stable_ratio():
     for xi, yi in zip(x, y):
         beta = kf.update(float(xi), float(yi))
     assert abs(beta - 1.25) < 0.01
+
+
+def test_rolling_stats_match_sample_std_after_window_rolls():
+    strategy = PairStrategy(window=5)
+    values = [1.0, 1.5, 2.0, 0.5, 3.0, -1.0, 2.5]
+    for value in values:
+        strategy._append_spread(value)
+
+    expected = np.asarray(values[-5:], dtype=float)
+    mean, sd = strategy._rolling_stats()
+    assert mean == pytest.approx(float(expected.mean()))
+    assert sd == pytest.approx(float(expected.std(ddof=1)))
