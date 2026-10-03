@@ -1,5 +1,6 @@
 #include "sentinel/execution_engine.hpp"
 #include "sentinel/protocol.hpp"
+#include "sentinel/runtime_profile.hpp"
 #include <rigtorp/SPSCQueue.h>
 #include <zmq.h>
 
@@ -30,7 +31,14 @@ void print_stats(const sentinel::EngineState& s) {
 }
 
 int main(int argc, char** argv) {
-  const std::string endpoint = (argc > 1) ? argv[1] : "ipc:///tmp/sentinel_exec_in.ipc";
+  const std::string endpoint = (argc > 1 && argv[1][0] != ' -') ? argv[1] : "ipc:///tmp/sentinel_exec_in.ipc";
+  sentinel::RuntimeProfile runtime{};
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--cpu" && i + 1 < argc) runtime.cpu = std::stoi(argv[++i]);
+    else if (arg == "--mlock") runtime.lock_memory = true;
+    else if (arg == "--fifo" && i + 1 < argc) { runtime.realtime = true; runtime.fifo_priority = std::stoi(argv[++i]); }
+  }
   void* ctx = zmq_ctx_new();
   void* pull = zmq_socket(ctx, ZMQ_PULL);
   void* push = zmq_socket(ctx, ZMQ_PUSH);
@@ -62,6 +70,7 @@ int main(int argc, char** argv) {
   sentinel::ExecutionEngine engine;
 
   std::thread execution_thread([&] {
+    sentinel::apply_runtime_profile(runtime);
     while (running.load(std::memory_order_acquire) || !input_queue.empty()) {
       auto* command = input_queue.front();
       if (!command) { std::this_thread::yield(); continue; }
