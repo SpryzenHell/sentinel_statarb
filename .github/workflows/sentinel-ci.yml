@@ -23,6 +23,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[full]'
 
+      - name: Python syntax check
+        run: python -m compileall -q python scripts tests
+
       - name: Python unit tests
         run: pytest -q tests
 
@@ -40,6 +43,9 @@ jobs:
 
       - name: ZeroMQ IPC end-to-end
         run: python scripts/benchmark_ipc.py --orders 1000
+
+      - name: Strategy to C++ execution replay
+        run: python scripts/run_replay.py --ticks 5000
 
       - name: ZeroMQ transport latency
         run: ./build/sentinel/sentinel_zmq_bench 10000 | tee results/zmq_latency.txt
