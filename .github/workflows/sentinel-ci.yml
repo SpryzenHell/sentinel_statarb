@@ -1,0 +1,38 @@
+name: Sentinel CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev pkg-config
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[full]'
+
+      - name: Python unit tests
+        run: pytest -q tests
+
+      - name: Build C++
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel
+
+      - name: CTest
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Strategy backtest
+        run: python scripts/run_backtest.py
+
+      - name: ZeroMQ IPC smoke
+        run: python scripts/benchmark_ipc.py --orders 1000
