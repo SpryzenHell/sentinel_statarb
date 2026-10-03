@@ -57,6 +57,29 @@ python scripts/benchmark_duckdb.py --ticks 10000000 --batch 100000
 
 The 10M-row run is intentionally separate from the default smoke tests because it is a heavier storage benchmark.
 
+
+## Latest verified run
+
+Verified in GitHub Actions on **2026-10-03**, run #41, Ubuntu x86_64, C++20/GCC 13.3, Python 3.12, with libzmq3-dev and DuckDB 1.5.6.
+
+| Measurement | Result |
+|---|---:|
+| Python unit tests | 2/2 passed |
+| C++ CTest suite | 3/3 passed |
+| Direct C++ execution core | **0.070 us median / 0.080 us p99 / 0.130 us p99.9** |
+| Rigtorp SPSC benchmark | **164.372 Mops/s**, 5M items |
+| Python -> ZeroMQ -> C++ E2E | **768.774 orders/s**, 1,000 orders |
+| Python strategy -> C++ execution replay | **5,000 ticks**, 5 entries, 5 exits, 10 execution reports |
+| Replay throughput | **8,592.639 ticks/s** |
+| ZeroMQ IPC transport | **39.082 us median / 47.499 us p99 / 59.230 us p99.9** |
+| Async DuckDB logging | **10,000,000 rows**, **2,662,236 rows/s** |
+
+The direct C++ core measurement supports a sub-millisecond **core-function benchmark** on this runner. It does not establish the original resume's separate “HPC” environment claim.
+
+The ZeroMQ measurement is **not** sub-10 us on this runner, so that number should not be stated as a verified resume result without a dedicated target-hardware benchmark.
+
+The strategy comparison is deterministic synthetic data. In this run, the dynamic debouncer reduced entries from 1,994 to 56 and reduced the absolute synthetic maximum drawdown from 6.786 to 0.194 spread units. That is a benchmark result for this synthetic scenario, not a claim about live trading performance.
+
 ## Reproducibility
 
 All research benchmarks use fixed seeds and write machine-readable JSON results under `results/`. Latency/throughput numbers belong in this README only after the corresponding benchmark has actually been run on the target hardware.
