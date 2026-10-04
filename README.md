@@ -157,6 +157,10 @@ The ZeroMQ measurement is **not** sub-10 us on this runner, so that number shoul
 
 The strategy comparison is deterministic synthetic data. The older run's protection result is a benchmark on that synthetic scenario, not a claim about live trading performance.
 
+## Research methodology
+
+The detailed signal, execution, risk, sensitivity, and evidence methodology is documented in [docs/RESEARCH_METHODOLOGY.md](docs/RESEARCH_METHODOLOGY.md).
+
 ## Reproducibility
 
 All research benchmarks use fixed seeds and write machine-readable JSON results under `results/`. Latency/throughput numbers belong in this README only after the corresponding benchmark has actually been run on the target hardware.
