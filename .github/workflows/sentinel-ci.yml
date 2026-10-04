@@ -104,3 +104,15 @@ jobs:
       - name: Run engine sanitizer smoke test
         run: |
           ASAN_OPTIONS=detect_leaks=1           UBSAN_OPTIONS=print_stacktrace=1           ctest --test-dir build-san -R '^sentinel_engine_smoke$' --output-on-failure
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t sentinel-statarb .
+
+      - name: Run clean-container backtest
+        run: docker run --rm sentinel-statarb
