@@ -66,7 +66,7 @@ Every run reports:
 - combined cost;
 - turnover;
 - maximum gross and net exposure;
-- trade count, win rate, average/best/worst trade;
+- trade count, mean-reversion exits, OCO stop-limit exits, win rate, average/best/worst trade;
 - profit factor.
 
 No Sharpe ratio or annualized metric is emitted by default because the synthetic tick horizon does not represent a defensible calendar sampling frequency.
