@@ -35,6 +35,7 @@ struct OrderMessage {
   double qty;
 };
 
+// Report status: 1=fill, 2=stale-quote reject, 3=OCO stop-limit fill, 4=invalid order.
 struct ReportMessage {
   MessageType type;
   Side side;
