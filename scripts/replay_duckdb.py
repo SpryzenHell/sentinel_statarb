@@ -56,6 +56,7 @@ def main() -> None:
     parser.add_argument("--commission-bps", type=float, default=0.40)
     parser.add_argument("--slippage-bps", type=float, default=1.00)
     parser.add_argument("--target-notional", type=float, default=10_000.0)
+    parser.add_argument("--execution-delay-ticks", type=int, default=1)
     args = parser.parse_args()
 
     execution = ExecutionConfig(
@@ -64,8 +65,11 @@ def main() -> None:
         slippage_bps=args.slippage_bps,
     )
 
-    baseline = run_ticks(_load_ticks(args.db, args.table, args.limit), dynamic=False, execution=execution, seed=-1)
-    dynamic = run_ticks(_load_ticks(args.db, args.table, args.limit), dynamic=True, execution=execution, seed=-1)
+    if args.execution_delay_ticks < 0:
+        raise SystemExit("--execution-delay-ticks must be non-negative")
+
+    baseline = run_ticks(_load_ticks(args.db, args.table, args.limit), dynamic=False, execution=execution, execution_delay_ticks=args.execution_delay_ticks, seed=-1)
+    dynamic = run_ticks(_load_ticks(args.db, args.table, args.limit), dynamic=True, execution=execution, execution_delay_ticks=args.execution_delay_ticks, seed=-1)
 
     payload = {
         "db": str(args.db),
