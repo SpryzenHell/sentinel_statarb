@@ -37,6 +37,12 @@ int main() {
   tick.volatility = 0.001;
   engine.on_tick(tick);
 
+  auto invalid_tick = tick;
+  invalid_tick.ts_ns = now_ns();
+  invalid_tick.bid_a = 0.0;
+  engine.on_tick(invalid_tick);
+  require(engine.state().invalid_ticks == 1, "invalid tick counter wrong");
+
   sentinel::OrderMessage order{};
   order.type = sentinel::MessageType::kOrder;
   order.side = sentinel::Side::kBuy;
