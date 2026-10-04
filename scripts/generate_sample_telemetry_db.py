@@ -29,7 +29,8 @@ def main() -> None:
             "DuckDB is required. Install with: pip install -e '.[full]'"
         ) from exc
 
-    ticks = generate_path(seed=args.seed, n=args.ticks, crash_at=max(100, args.ticks // 2))
+    crash_at = min(args.ticks - 1, max(1, args.ticks // 2))
+    ticks = generate_path(seed=args.seed, n=args.ticks, crash_at=crash_at)
 
     root = ROOT
     db = root / args.db
