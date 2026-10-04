@@ -25,6 +25,8 @@ class BacktestResult:
     trades_entered: int
     exits: int
     stop_exits: int
+    mean_reversion_exits: int
+    oco_stop_limit_exits: int
     pnl: float
     return_pct: float
     max_drawdown: float
@@ -346,6 +348,8 @@ def run_ticks(
         trades_entered=portfolio.trade_count,
         exits=len(trade_pnls),
         stop_exits=strategy.stop_exits,
+        mean_reversion_exits=max(0, strategy.exits - strategy.stop_exits),
+        oco_stop_limit_exits=strategy.stop_exits,
         pnl=float(total_pnl),
         return_pct=float(return_pct),
         max_drawdown=float(min_drawdown),
