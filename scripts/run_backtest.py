@@ -13,7 +13,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Sentinel synthetic stat-arb backtest.")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--ticks", type=int, default=50_000)
-    parser.add_argument("--crash-at", type=int, default=25_000)
+    parser.add_argument("--crash-at", type=int, default=None)
     parser.add_argument("--initial-cash", type=float, default=1_000_000.0)
     parser.add_argument("--target-notional", type=float, default=10_000.0)
     parser.add_argument("--commission-bps", type=float, default=0.40)
@@ -27,6 +27,8 @@ def main() -> None:
     if args.execution_delay_ticks < 0:
         raise SystemExit("--execution-delay-ticks must be non-negative")
 
+    crash_at = args.crash_at if args.crash_at is not None else args.ticks // 2
+
     execution = ExecutionConfig(
         initial_cash=args.initial_cash,
         target_gross_notional=args.target_notional,
@@ -39,7 +41,7 @@ def main() -> None:
     baseline = run(
         seed=args.seed,
         n=args.ticks,
-        crash_at=args.crash_at,
+        crash_at=crash_at,
         dynamic=False,
         execution=execution,
         execution_delay_ticks=args.execution_delay_ticks,
@@ -61,6 +63,7 @@ def main() -> None:
     payload = {
         "execution": execution.__dict__,
         "execution_delay_ticks": args.execution_delay_ticks,
+        "crash_at": crash_at,
         "strategy": {"entry_z": args.entry_z, "exit_z": args.exit_z, "window": args.window},
         "baseline": baseline.__dict__,
         "dynamic": dynamic.__dict__,
