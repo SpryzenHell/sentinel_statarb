@@ -45,6 +45,15 @@ double ExecutionEngine::spread() const noexcept {
 }
 
 void ExecutionEngine::on_tick(const TickMessage& tick) {
+  if (tick.type != MessageType::kTick ||
+      !(tick.bid_a > 0.0) || !(tick.ask_a >= tick.bid_a) ||
+      !(tick.bid_b > 0.0) || !(tick.ask_b >= tick.bid_b) ||
+      !std::isfinite(tick.bid_a) || !std::isfinite(tick.ask_a) ||
+      !std::isfinite(tick.bid_b) || !std::isfinite(tick.ask_b) ||
+      !(tick.volatility >= 0.0) || !std::isfinite(tick.volatility)) {
+    ++state_.invalid_ticks;
+    return;
+  }
   last_tick_ = tick;
   have_quote_ = true;
   ++state_.ticks;
