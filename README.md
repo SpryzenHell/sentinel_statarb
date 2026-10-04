@@ -37,7 +37,9 @@ Tune the execution assumptions directly:
 python scripts/run_backtest.py \
   --target-notional 10000 \
   --commission-bps 0.40 \
-  --slippage-bps 1.00
+  --slippage-bps 1.00 \
+  --execution-delay-ticks 1 \
+  --entry-z 2.0 --exit-z 0.5 --window 200
 ```
 
 Run a sensitivity sweep over multiple execution-cost assumptions and crash locations:
