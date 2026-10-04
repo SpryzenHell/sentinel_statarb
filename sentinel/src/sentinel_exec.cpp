@@ -32,13 +32,42 @@ void print_stats(const sentinel::EngineState& s) {
 }
 
 int main(int argc, char** argv) {
-  const std::string endpoint = (argc > 1 && argv[1][0] != '-') ? argv[1] : "ipc:///tmp/sentinel_exec_in.ipc";
+  std::string endpoint = "ipc:///tmp/sentinel_exec_in.ipc";
+  bool endpoint_set = false;
   sentinel::RuntimeProfile runtime{};
+  sentinel::EngineConfig engine_cfg{};
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
-    if (arg == "--cpu" && i + 1 < argc) runtime.cpu = std::stoi(argv[++i]);
-    else if (arg == "--mlock") runtime.lock_memory = true;
-    else if (arg == "--fifo" && i + 1 < argc) { runtime.realtime = true; runtime.fifo_priority = std::stoi(argv[++i]); }
+    if (arg == "--help") {
+      std::cout
+          << "Usage: sentinel_exec [endpoint] [--cpu N] [--mlock] [--fifo P]"
+          << " [--slippage-bps X] [--commission-bps X]"
+          << " [--oco-stop-bps X] [--oco-limit-bps X] [--max-quote-age-us X]\n";
+      return 0;
+    } else if (arg == "--cpu" && i + 1 < argc) {
+      runtime.cpu = std::stoi(argv[++i]);
+    } else if (arg == "--mlock") {
+      runtime.lock_memory = true;
+    } else if (arg == "--fifo" && i + 1 < argc) {
+      runtime.realtime = true;
+      runtime.fifo_priority = std::stoi(argv[++i]);
+    } else if (arg == "--slippage-bps" && i + 1 < argc) {
+      engine_cfg.slippage_bps = std::stod(argv[++i]);
+    } else if (arg == "--commission-bps" && i + 1 < argc) {
+      engine_cfg.commission_bps = std::stod(argv[++i]);
+    } else if (arg == "--oco-stop-bps" && i + 1 < argc) {
+      engine_cfg.oco_stop_bps = std::stod(argv[++i]);
+    } else if (arg == "--oco-limit-bps" && i + 1 < argc) {
+      engine_cfg.oco_limit_bps = std::stod(argv[++i]);
+    } else if (arg == "--max-quote-age-us" && i + 1 < argc) {
+      engine_cfg.max_quote_age_us = std::stod(argv[++i]);
+    } else if (!arg.empty() && arg[0] != '-' && !endpoint_set) {
+      endpoint = arg;
+      endpoint_set = true;
+    } else {
+      std::cerr << "Unknown or incomplete argument: " << arg << "\n";
+      return 2;
+    }
   }
   void* ctx = zmq_ctx_new();
   void* pull = zmq_socket(ctx, ZMQ_PULL);
@@ -68,7 +97,7 @@ int main(int argc, char** argv) {
   rigtorp::SPSCQueue<Telemetry> telemetry_queue(1 << 16);
   std::atomic<bool> running{true};
   std::atomic<std::uint64_t> telemetry_drops{0};
-  sentinel::ExecutionEngine engine;
+  sentinel::ExecutionEngine engine(engine_cfg);
 
   std::thread execution_thread([&] {
     sentinel::apply_runtime_profile(runtime);
