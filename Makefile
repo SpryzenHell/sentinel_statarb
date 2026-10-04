@@ -3,7 +3,7 @@
 PYTHON ?= python3
 BUILD_DIR ?= build
 
-setup:
+setup: build
 	$(PYTHON) -m venv .venv
 	. .venv/bin/activate && python -m pip install --upgrade pip && pip install -e '.[full]'
 
@@ -11,7 +11,7 @@ build:
 	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(BUILD_DIR) --parallel
 
-test:
+test: build
 	$(PYTHON) -m pytest -q
 	ctest --test-dir $(BUILD_DIR) --output-on-failure
 
