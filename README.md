@@ -96,10 +96,12 @@ The execution process accepts optional runtime controls:
 ```bash
 ./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4
 ./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4 --mlock
-./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4 --fifo 20
+./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4 --fifo 20 \
+  --slippage-bps 1 --commission-bps 0.4 --oco-stop-bps 5 --oco-limit-bps 5 \
+  --max-quote-age-us 250
 ```
 
-`--cpu` pins the execution thread to one logical CPU. `--mlock` requests `mlockall`; `--fifo` requests `SCHED_FIFO`. The process reports whether each request succeeded. These controls can require elevated privileges or scheduler limits on the host.
+`--cpu` pins the execution thread to one logical CPU. `--slippage-bps`, `--commission-bps`, `--oco-stop-bps`, `--oco-limit-bps`, and `--max-quote-age-us` configure the paper-execution model exposed by the same C++ engine. `--mlock` requests `mlockall`; `--fifo` requests `SCHED_FIFO`. The process reports whether each request succeeded. These controls can require elevated privileges or scheduler limits on the host.
 
 Capture host state before benchmarking:
 
