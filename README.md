@@ -302,7 +302,7 @@ For a clean-checkout verification, `python scripts/verify_installation.py` check
 
 ## 9. Figures and implementation diagrams
 
-The figures in this README are generated from the repository's implementation and recorded benchmark data. There are no fabricated product screenshots or placeholder performance charts.
+The figures in this README are generated from the repository's implementation and recorded benchmark data. The project is a command-line/service stack rather than a GUI, so there are no fabricated product screenshots or placeholder performance charts.
 
 ### Runtime topology
 
@@ -321,6 +321,10 @@ The OCO example uses the same 100.00 entry and 5 bps stop/limit test configurati
 ### Historical benchmark record
 
 ![Historical benchmark record](docs/images/verified_benchmarks.svg)
+
+### Recorded command-line run
+
+![Recorded command-line benchmark output](docs/images/terminal_verified_run.svg)
 
 ### Latency measurements
 
