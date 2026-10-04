@@ -197,11 +197,18 @@ def run_ticks(
     *,
     dynamic: bool = True,
     execution: ExecutionConfig | None = None,
+    execution_delay_ticks: int = 1,
     seed: int = -1,
     crash_at: int | None = None,
 ) -> BacktestResult:
-    """Run strategy and portfolio accounting on an ordered, streamable Tick iterable."""
+    """Run strategy and portfolio accounting on an ordered, streamable Tick iterable.
 
+    Signals generated at tick t are scheduled for execution at t + execution_delay_ticks.
+    The default one-tick delay prevents same-quote signal/fill lookahead.
+    """
+
+    if execution_delay_ticks < 0:
+        raise ValueError("execution_delay_ticks must be non-negative")
     if crash_at is not None and crash_at < 0:
         raise ValueError("crash_at must be non-negative")
 
@@ -214,6 +221,7 @@ def run_ticks(
     portfolio = PaperPortfolio(execution or ExecutionConfig())
     trade_pnls: list[float] = []
     open_trade: _OpenTrade | None = None
+    scheduled: dict[int, tuple[int, float]] = {}
 
     count = 0
     last_tick: Tick | None = None
@@ -223,24 +231,45 @@ def run_ticks(
     crash_pre_equity: float | None = None
     crash_low: float | None = None
 
+    def execute_target(target: int, beta: float, tick: Tick) -> None:
+        nonlocal open_trade
+        current = 0 if portfolio.position_a == 0.0 else (1 if portfolio.position_a > 0.0 else -1)
+
+        if current == 0 and target != 0:
+            before = portfolio.equity(tick)
+            portfolio.enter_spread(target, beta, tick)
+            open_trade = _OpenTrade(before)
+        elif current != 0 and target == 0:
+            portfolio.exit_spread(tick)
+            if open_trade is not None:
+                trade_pnls.append(portfolio.equity(tick) - open_trade.equity_before_entry)
+            open_trade = None
+        elif current != 0 and target != 0 and current != target:
+            portfolio.exit_spread(tick)
+            if open_trade is not None:
+                trade_pnls.append(portfolio.equity(tick) - open_trade.equity_before_entry)
+            before = portfolio.equity(tick)
+            portfolio.enter_spread(target, beta, tick)
+            open_trade = _OpenTrade(before)
+
     for tick in ticks:
         if crash_at == count == 0:
             crash_pre_equity = portfolio.equity(tick)
+
+        scheduled_action = scheduled.pop(count, None)
+        if scheduled_action is not None:
+            execute_target(scheduled_action[0], scheduled_action[1], tick)
 
         previous_position = strategy.position
         strategy.update(tick)
         current_position = strategy.position
 
-        if previous_position == 0 and current_position != 0:
-            before = portfolio.equity(tick)
-            portfolio.enter_spread(current_position, strategy.beta.beta, tick)
-            open_trade = _OpenTrade(before)
-
-        elif previous_position != 0 and current_position == 0:
-            portfolio.exit_spread(tick)
-            if open_trade is not None:
-                trade_pnls.append(portfolio.equity(tick) - open_trade.equity_before_entry)
-            open_trade = None
+        if current_position != previous_position:
+            due = count + execution_delay_ticks
+            if execution_delay_ticks == 0:
+                execute_target(current_position, strategy.beta.beta, tick)
+            else:
+                scheduled[due] = (current_position, strategy.beta.beta)
 
         portfolio.exposures(tick)
         last_equity = portfolio.equity(tick)
@@ -327,19 +356,20 @@ def run_ticks(
         profit_factor=float(profit_factor),
     )
 
-
 def run(
     seed: int = 7,
     n: int = 50_000,
     crash_at: int = 25_000,
     dynamic: bool = True,
     execution: ExecutionConfig | None = None,
+    execution_delay_ticks: int = 1,
 ) -> BacktestResult:
     ticks = generate_path(seed, n, crash_at)
     return run_ticks(
         ticks,
         dynamic=dynamic,
         execution=execution,
+        execution_delay_ticks=execution_delay_ticks,
         seed=seed,
         crash_at=crash_at,
     )
