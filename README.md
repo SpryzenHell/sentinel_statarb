@@ -128,7 +128,7 @@ The research engine deliberately separates signal generation from portfolio acco
 - Buys cross the ask and sells cross the bid; an additional configurable bps slippage is then applied adversely.
 - Commission is charged independently on each filled leg.
 - Equity is marked from the two-leg mid-market portfolio value, while drawdown is calculated from the resulting equity curve.
-- Trade PnL includes entry and exit execution costs; the output also reports fees, bid/ask crossing cost, explicit slippage, turnover, and max gross/net exposure.
+- Trade PnL includes entry and exit execution costs; the output also reports fees, bid/ask crossing cost, explicit slippage, total cost, turnover, return, max drawdown in currency and percent, best/worst trade, profit factor, and max gross/net exposure.
 - The synthetic flash-crash metric is the positive equity loss from the tick immediately before the crash to the lowest equity observed in the following 45 ticks.
 
 This remains a simplified paper-trading model: it does not model exchange-specific queue position, partial fills, borrow constraints, financing, funding, or market impact.
