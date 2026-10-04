@@ -12,6 +12,7 @@ struct EngineConfig {
   double oco_stop_bps{5.0};
   double oco_limit_bps{5.0};
   double max_quote_age_us{250.0};
+  double commission_bps{0.0};
 };
 
 struct EngineState {
