@@ -90,6 +90,22 @@ def test_backtest_is_flat_after_final_liquidation_and_metrics_are_sane():
     assert math.isfinite(result.worst_trade_pnl)
 
 
+def test_nonzero_execution_delay_is_recorded():
+    ticks = generate_path(seed=7, n=1200, crash_at=600)
+    immediate = run_ticks(iter(ticks), dynamic=True, seed=7, crash_at=600, execution_delay_ticks=0)
+    delayed = run_ticks(iter(ticks), dynamic=True, seed=7, crash_at=600, execution_delay_ticks=1)
+
+    assert immediate.execution_delay_ticks == 0
+    assert delayed.execution_delay_ticks == 1
+    assert math.isfinite(immediate.pnl)
+    assert math.isfinite(delayed.pnl)
+
+
+def test_negative_execution_delay_is_rejected():
+    with pytest.raises(ValueError, match="execution_delay_ticks"):
+        run_ticks([], execution_delay_ticks=-1)
+
+
 def test_run_ticks_accepts_streaming_iterables():
     ticks = generate_path(seed=5, n=500, crash_at=250)
     result = run_ticks(iter(ticks), dynamic=True, seed=-1, crash_at=250)
