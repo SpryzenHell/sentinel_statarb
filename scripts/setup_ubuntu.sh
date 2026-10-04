@@ -9,6 +9,9 @@ fi
 sudo apt-get update
 sudo apt-get install -y   build-essential   cmake   git   pkg-config   libzmq3-dev   python3   python3-pip   python3-venv
 
+python3 -c 'import sys; assert sys.version_info >= (3, 12), "Python 3.12 or newer is required"' \
+  || { echo "Python 3.12 or newer is required." >&2; exit 1; }
+
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
