@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import math
 import struct
 import time
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ class CryptofeedBridge:
         self.symbol_b = symbol_b
         self.books: dict[str, BestQuote] = {}
         self.seq = 0
+        self.invalid_books = 0
         self.ctx = zmq.asyncio.Context.instance()
         self.socket = self.ctx.socket(zmq.PUSH)
         self.socket.connect(endpoint)
@@ -36,8 +38,18 @@ class CryptofeedBridge:
             return
         bid, _ = book.book.bids.index(0)
         ask, _ = book.book.asks.index(0)
+        bid = float(bid)
+        ask = float(ask)
+        if not (
+            math.isfinite(bid)
+            and math.isfinite(ask)
+            and bid > 0.0
+            and ask >= bid
+        ):
+            self.invalid_books += 1
+            return
         self.books[book.symbol] = BestQuote(
-            float(bid), float(ask), int(receipt_timestamp * 1e9)
+            bid, ask, int(receipt_timestamp * 1e9)
         )
         if self.symbol_a not in self.books or self.symbol_b not in self.books:
             return
