@@ -84,3 +84,28 @@ def test_bridge_ignores_empty_books():
         await bridge.close()
 
     asyncio.run(scenario())
+
+
+class _InvalidBook(_Book):
+    pass
+
+
+def test_bridge_rejects_invalid_best_quotes():
+    async def scenario():
+        bridge = CryptofeedBridge(
+            "inproc://sentinel-test-invalid-feed",
+            symbol_a="BTC-USD",
+            symbol_b="ETH-USD",
+        )
+        bridge.socket.send = AsyncMock()
+
+        await bridge.on_book(_Book("BTC-USD", 0.0, 100.0), 123.456)
+        await bridge.on_book(_Book("ETH-USD", 200.0, 199.0), 123.789)
+
+        assert bridge.invalid_books == 2
+        assert bridge.books == {}
+        bridge.socket.send.assert_not_awaited()
+
+        await bridge.close()
+
+    asyncio.run(scenario())
