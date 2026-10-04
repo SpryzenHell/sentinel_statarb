@@ -26,6 +26,7 @@ struct Telemetry {
 void print_stats(const sentinel::EngineState& s) {
   std::cerr << "ticks=" << s.ticks << " orders=" << s.orders
             << " fills=" << s.fills << " stale_rejects=" << s.stale_rejects
+            << " invalid_ticks=" << s.invalid_ticks
             << " stop_events=" << s.stop_events << "\n";
 }
 }
