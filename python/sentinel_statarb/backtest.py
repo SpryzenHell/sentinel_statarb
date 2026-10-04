@@ -199,6 +199,9 @@ def run_ticks(
     dynamic: bool = True,
     execution: ExecutionConfig | None = None,
     execution_delay_ticks: int = 1,
+    entry_z: float = 2.0,
+    exit_z: float = 0.5,
+    window: int = 200,
     seed: int = -1,
     crash_at: int | None = None,
 ) -> BacktestResult:
@@ -210,10 +213,16 @@ def run_ticks(
 
     if execution_delay_ticks < 0:
         raise ValueError("execution_delay_ticks must be non-negative")
+    if entry_z <= 0.0:
+        raise ValueError("entry_z must be positive")
+    if exit_z < 0.0 or exit_z >= entry_z:
+        raise ValueError("exit_z must be non-negative and less than entry_z")
+    if window < 2:
+        raise ValueError("window must be at least 2")
     if crash_at is not None and crash_at < 0:
         raise ValueError("crash_at must be non-negative")
 
-    strategy = PairStrategy()
+    strategy = PairStrategy(entry_z=entry_z, exit_z=exit_z, window=window)
     if not dynamic:
         strategy.debouncer.base = 1
         strategy.debouncer.max_confirmations = 1
@@ -365,6 +374,9 @@ def run(
     dynamic: bool = True,
     execution: ExecutionConfig | None = None,
     execution_delay_ticks: int = 1,
+    entry_z: float = 2.0,
+    exit_z: float = 0.5,
+    window: int = 200,
 ) -> BacktestResult:
     ticks = generate_path(seed, n, crash_at)
     return run_ticks(
@@ -372,6 +384,9 @@ def run(
         dynamic=dynamic,
         execution=execution,
         execution_delay_ticks=execution_delay_ticks,
+        entry_z=entry_z,
+        exit_z=exit_z,
+        window=window,
         seed=seed,
         crash_at=crash_at,
     )
