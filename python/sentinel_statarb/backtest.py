@@ -374,7 +374,7 @@ def run_ticks(
 def run(
     seed: int = 7,
     n: int = 50_000,
-    crash_at: int = 25_000,
+    crash_at: int | None = None,
     dynamic: bool = True,
     execution: ExecutionConfig | None = None,
     execution_delay_ticks: int = 1,
