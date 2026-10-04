@@ -25,11 +25,14 @@ class BacktestResult:
     exits: int
     stop_exits: int
     pnl: float
+    return_pct: float
     max_drawdown: float
+    max_drawdown_pct: float
     flash_crash_loss: float
     fees: float
     spread_cost: float
     slippage_cost: float
+    total_cost: float
     turnover: float
     max_gross_exposure: float
     max_net_exposure: float
@@ -37,6 +40,9 @@ class BacktestResult:
     losing_trades: int
     win_rate: float
     avg_trade_pnl: float
+    best_trade_pnl: float
+    worst_trade_pnl: float
+    profit_factor: float
 
 
 class PaperPortfolio:
@@ -284,6 +290,14 @@ def run_ticks(
     wins = sum(1 for pnl in trade_pnls if pnl > 0.0)
     losses = sum(1 for pnl in trade_pnls if pnl < 0.0)
     total_pnl = portfolio.equity(last_tick) - portfolio.config.initial_cash
+    initial_cash = portfolio.config.initial_cash
+    max_drawdown_pct = (min_drawdown / initial_cash) * 100.0
+    return_pct = (total_pnl / initial_cash) * 100.0
+    gross_profit = sum(p for p in trade_pnls if p > 0.0)
+    gross_loss = -sum(p for p in trade_pnls if p < 0.0)
+    profit_factor = gross_profit / gross_loss if gross_loss > 0.0 else float("inf")
+    best_trade = max(trade_pnls) if trade_pnls else 0.0
+    worst_trade = min(trade_pnls) if trade_pnls else 0.0
 
     return BacktestResult(
         label="dynamic" if dynamic else "baseline",
@@ -293,11 +307,14 @@ def run_ticks(
         exits=len(trade_pnls),
         stop_exits=strategy.stop_exits,
         pnl=float(total_pnl),
+        return_pct=float(return_pct),
         max_drawdown=float(min_drawdown),
+        max_drawdown_pct=float(max_drawdown_pct),
         flash_crash_loss=float(flash_crash_loss),
         fees=float(portfolio.fees),
         spread_cost=float(portfolio.spread_cost),
         slippage_cost=float(portfolio.slippage_cost),
+        total_cost=float(portfolio.fees + portfolio.spread_cost + portfolio.slippage_cost),
         turnover=float(portfolio.turnover),
         max_gross_exposure=float(portfolio.max_gross_exposure),
         max_net_exposure=float(portfolio.max_net_exposure),
@@ -305,6 +322,9 @@ def run_ticks(
         losing_trades=losses,
         win_rate=float(wins / len(trade_pnls)) if trade_pnls else 0.0,
         avg_trade_pnl=float(np.mean(trade_pnls)) if trade_pnls else 0.0,
+        best_trade_pnl=float(best_trade),
+        worst_trade_pnl=float(worst_trade),
+        profit_factor=float(profit_factor),
     )
 
 
