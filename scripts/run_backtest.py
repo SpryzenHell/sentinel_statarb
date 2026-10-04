@@ -19,6 +19,9 @@ def main() -> None:
     parser.add_argument("--commission-bps", type=float, default=0.40)
     parser.add_argument("--slippage-bps", type=float, default=1.00)
     parser.add_argument("--execution-delay-ticks", type=int, default=1)
+    parser.add_argument("--entry-z", type=float, default=2.0)
+    parser.add_argument("--exit-z", type=float, default=0.5)
+    parser.add_argument("--window", type=int, default=200)
     args = parser.parse_args()
 
     if args.execution_delay_ticks < 0:
@@ -40,6 +43,9 @@ def main() -> None:
         dynamic=False,
         execution=execution,
         execution_delay_ticks=args.execution_delay_ticks,
+        entry_z=args.entry_z,
+        exit_z=args.exit_z,
+        window=args.window,
     )
     dynamic = run(
         seed=args.seed,
@@ -48,10 +54,14 @@ def main() -> None:
         dynamic=True,
         execution=execution,
         execution_delay_ticks=args.execution_delay_ticks,
+        entry_z=args.entry_z,
+        exit_z=args.exit_z,
+        window=args.window,
     )
     payload = {
         "execution": execution.__dict__,
         "execution_delay_ticks": args.execution_delay_ticks,
+        "strategy": {"entry_z": args.entry_z, "exit_z": args.exit_z, "window": args.window},
         "baseline": baseline.__dict__,
         "dynamic": dynamic.__dict__,
         "delta_pnl": dynamic.pnl - baseline.pnl,
