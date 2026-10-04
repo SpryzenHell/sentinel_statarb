@@ -81,6 +81,13 @@ def test_backtest_is_flat_after_final_liquidation_and_metrics_are_sane():
     assert result.spread_cost >= 0.0
     assert result.slippage_cost >= 0.0
     assert result.max_gross_exposure >= result.max_net_exposure >= 0.0
+    assert result.total_cost == pytest.approx(
+        result.fees + result.spread_cost + result.slippage_cost
+    )
+    assert result.return_pct == pytest.approx(result.pnl / execution.initial_cash * 100.0)
+    assert result.max_drawdown_pct <= 0.0
+    assert math.isfinite(result.best_trade_pnl)
+    assert math.isfinite(result.worst_trade_pnl)
 
 
 def test_run_ticks_accepts_streaming_iterables():
