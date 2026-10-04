@@ -155,7 +155,7 @@ bool ExecutionEngine::check_oco(ReportMessage& report) {
       report.fill_b,
       (report.side == Side::kBuy) ? Side::kSell : Side::kBuy,
       cfg_.slippage_bps);
-  report.spread = s;
+  report.spread = report.fill_a - cfg_.hedge_ratio * report.fill_b;
   report.oco_stop_spread = stop_spread_;
   report.oco_limit_spread = limit_spread_;
   report.status = 3;  // OCO stop-limit fill
