@@ -1,4 +1,4 @@
-.PHONY: setup build test verify backtest sensitivity robustness parameters replay profile bench docker-build clean
+.PHONY: setup build test verify demo backtest sensitivity robustness parameters replay profile bench docker-build clean
 
 PYTHON ?= python3
 BUILD_DIR ?= build
@@ -19,6 +19,12 @@ test: build
 
 verify: build
 	$(PYTHON) scripts/verify_installation.py --build-dir $(BUILD_DIR)
+
+demo: build
+	./$(BUILD_DIR)/sentinel/sentinel_engine_smoke
+	$(PYTHON) scripts/run_backtest.py
+	$(PYTHON) scripts/generate_sample_telemetry_db.py --ticks 5000
+	$(PYTHON) scripts/replay_duckdb.py --db results/sample_telemetry.duckdb
 
 backtest:
 	$(PYTHON) scripts/run_backtest.py
