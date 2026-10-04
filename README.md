@@ -48,6 +48,14 @@ Run the complete test suite:
 make test
 ```
 
+Run the complete local demonstration in one command:
+
+```bash
+make demo
+```
+
+This runs the C++ engine smoke test, the synthetic backtest, creates a small DuckDB dataset and replays it through the research engine.
+
 Run the main synthetic backtest:
 
 ```bash
@@ -289,6 +297,8 @@ On a Linux host where CPU pinning is appropriate:
 ```
 
 The repository does not treat the terms “HPC”, “sub-10 µs”, or “sub-millisecond” as measured facts unless the corresponding benchmark has actually been run and preserved.
+
+For a clean-checkout verification, `python scripts/verify_installation.py` checks the Python dependencies, required native binaries and the `sentinel_exec --help` path.
 
 ## 9. Figures and implementation diagrams
 
