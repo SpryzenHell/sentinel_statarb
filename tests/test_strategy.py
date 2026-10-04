@@ -15,6 +15,15 @@ def test_dynamic_debouncer_requires_more_confirmation_in_high_vol():
     assert debouncer.required(0.005) >= 5
 
 
+def test_oco_short_side_uses_symmetric_stop_limit_semantics():
+    bracket = OCOBracket(-1, 100.0, reference_notional=100.0, stop_bps=5.0)
+    assert not bracket.check_stop(100.04)
+    assert not bracket.check_stop(100.11)  # stop triggered, but above the 100.10 limit
+    assert bracket.stop_triggered
+    assert bracket.check_stop(100.10)
+    assert not bracket.active
+
+
 def test_oco_is_one_shot_and_uses_five_bps():
     bracket = OCOBracket(1, 100.0, reference_notional=100.0, stop_bps=5.0)
     assert bracket.active
