@@ -33,6 +33,7 @@ def main() -> None:
     parser.add_argument("--slippage-bps", type=float, default=1.00)
     parser.add_argument("--target-notional", type=float, default=10_000.0)
     parser.add_argument("--initial-cash", type=float, default=1_000_000.0)
+    parser.add_argument("--execution-delay-ticks", type=int, default=1)
     args = parser.parse_args()
 
     seeds = _ints(args.seeds)
@@ -59,6 +60,7 @@ def main() -> None:
                 crash_at=crash_at,
                 dynamic=False,
                 execution=execution,
+                execution_delay_ticks=args.execution_delay_ticks,
             )
             dynamic = run(
                 seed=seed,
@@ -66,6 +68,7 @@ def main() -> None:
                 crash_at=crash_at,
                 dynamic=True,
                 execution=execution,
+                execution_delay_ticks=args.execution_delay_ticks,
             )
             cases.append(
                 {
