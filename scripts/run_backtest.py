@@ -18,6 +18,7 @@ def main() -> None:
     parser.add_argument("--target-notional", type=float, default=10_000.0)
     parser.add_argument("--commission-bps", type=float, default=0.40)
     parser.add_argument("--slippage-bps", type=float, default=1.00)
+    parser.add_argument("--execution-delay-ticks", type=int, default=1)
     args = parser.parse_args()
 
     execution = ExecutionConfig(
@@ -35,6 +36,7 @@ def main() -> None:
         crash_at=args.crash_at,
         dynamic=False,
         execution=execution,
+        execution_delay_ticks=args.execution_delay_ticks,
     )
     dynamic = run(
         seed=args.seed,
@@ -42,6 +44,7 @@ def main() -> None:
         crash_at=args.crash_at,
         dynamic=True,
         execution=execution,
+        execution_delay_ticks=args.execution_delay_ticks,
     )
     payload = {
         "execution": execution.__dict__,
