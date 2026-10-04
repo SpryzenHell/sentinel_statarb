@@ -16,6 +16,14 @@ static void require(bool ok, const char* msg) {
 }
 
 int main() {
+  bool rejected_bad_config = false;
+  try {
+    sentinel::ExecutionEngine bad({0.0, 0.0, 5.0, 5.0, 250.0});
+  } catch (const std::invalid_argument&) {
+    rejected_bad_config = true;
+  }
+  require(rejected_bad_config, "invalid engine configuration was accepted");
+
   sentinel::ExecutionEngine engine({1.0, 0.0, 5.0, 5.0, 250.0});
 
   const auto ts = now_ns();
