@@ -1,11 +1,13 @@
-.PHONY: setup build test backtest sensitivity robustness parameters replay profile bench docker-build clean
+.PHONY: setup build test verify backtest sensitivity robustness parameters replay profile bench docker-build clean
 
 PYTHON ?= python3
 BUILD_DIR ?= build
 
-setup: build
+setup:
 	$(PYTHON) -m venv .venv
 	. .venv/bin/activate && python -m pip install --upgrade pip && pip install -e '.[full]'
+	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
+	cmake --build $(BUILD_DIR) --parallel
 
 build:
 	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
@@ -14,6 +16,9 @@ build:
 test: build
 	$(PYTHON) -m pytest -q
 	ctest --test-dir $(BUILD_DIR) --output-on-failure
+
+verify: build
+	$(PYTHON) scripts/verify_installation.py --build-dir $(BUILD_DIR)
 
 backtest:
 	$(PYTHON) scripts/run_backtest.py

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680">
+<rect width="100%" height="100%" fill="#fbfaf7"/>
+<text x="56" y="58" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#26373e">Latency measurements</text>
+<text x="56" y="91" font-family="Arial,Helvetica,sans-serif" font-size="16" fill="#607178">Historical benchmark values from GitHub Actions run #41</text>
+
+<style>.axis{stroke:#556a72;stroke-width:1.2}.bar{fill:#50727b}.t{font-family:Arial,Helvetica,sans-serif;fill:#2d4149}.s{font-size:14px}</style>
+<line class="axis" x1="100" y1="560" x2="1140" y2="560"/><line class="axis" x1="100" y1="130" x2="100" y2="560"/>
+<rect class="bar" x="145" y="557" width="90" height="3"/><text class="t s" x="190" y="547" text-anchor="middle">0.070 µs</text><text class="t s" x="190" y="590" text-anchor="middle">C++ median</text><rect class="bar" x="305" y="557" width="90" height="3"/><text class="t s" x="350" y="547" text-anchor="middle">0.080 µs</text><text class="t s" x="350" y="590" text-anchor="middle">C++ p99</text><rect class="bar" x="465" y="557" width="90" height="3"/><text class="t s" x="510" y="547" text-anchor="middle">0.130 µs</text><text class="t s" x="510" y="590" text-anchor="middle">C++ p99.9</text><rect class="bar" x="625" y="325.508" width="90" height="234.49200000000002"/><text class="t s" x="670" y="315.508" text-anchor="middle">39.082 µs</text><text class="t s" x="670" y="590" text-anchor="middle">ZMQ median</text><rect class="bar" x="785" y="275.006" width="90" height="284.994"/><text class="t s" x="830" y="265.006" text-anchor="middle">47.499 µs</text><text class="t s" x="830" y="590" text-anchor="middle">ZMQ p99</text><rect class="bar" x="945" y="204.62" width="90" height="355.38"/><text class="t s" x="990" y="194.62" text-anchor="middle">59.230 µs</text><text class="t s" x="990" y="590" text-anchor="middle">ZMQ p99.9</text>
+<text class="t" x="100" y="85" font-size="25" font-weight="700">Latency measurements from run #41</text>
+<text class="t s" x="100" y="615">The two groups have very different magnitudes; the chart is a direct display of the recorded values rather than a ratio comparison.</text>
+
+</svg>

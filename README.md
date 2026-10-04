@@ -1,48 +1,99 @@
 # Sentinel StatArb
 
-Sentinel StatArb is a reproducible statistical-arbitrage research + simulated execution stack built around four layers:
+![Sentinel StatArb project overview](docs/images/main.png)
 
-1. **Market-data path:** the upstream Cryptofeed-derived material remains in the repository, while the active Sentinel pipeline consumes normalized L2-like ticks.
-2. **Research path:** a Kalman hedge-ratio estimator, spread z-score, volatility-aware dynamic debouncer, and OCO stop-limit bracket implement the strategy/risk layer.
-3. **Execution path:** a C++20 simulated execution engine separates the latency-sensitive execution loop from Python research code, uses a cache-line-aware SPSC ring, and exposes a ZeroMQ IPC boundary.
-4. **Telemetry path:** an asynchronous Python writer batches ticks into DuckDB for replay and analytics; the full benchmark is designed for 10M+ rows.
+Sentinel StatArb is a small research and execution stack for a two-leg statistical-arbitrage strategy. The research side is written in Python. The latency-sensitive execution side is written in C++20. ZeroMQ is used at the process boundary, a single-producer/single-consumer queue is used inside the execution process, and DuckDB is used for asynchronous telemetry storage.
 
-## Resume-bullet mapping
+The repository is intended to run from a clean checkout. The quickest supported setup is Ubuntu 24.04 or another current Debian/Ubuntu system with a C++20 compiler. A Docker image is also provided for a self-contained run.
 
-### 1. Sub-millisecond C++ execution engine
-`sentinel/src/execution_engine.cpp` contains quote validation, execution, inventory and OCO state. The engine is independent of Python and can be driven through `sentinel_exec` over ZeroMQ.
+## What is in the repository
 
-### 2. Flash-crash protection
-`python/sentinel_statarb/strategy.py` contains `DynamicDebouncer` and `OCOBracket`. High-volatility signals require more consecutive confirmations, and the bracket uses an explicit 5 bps stop offset plus a separate limit offset. `scripts/run_backtest.py` compares baseline and protected behavior on a deterministic synthetic flash-crash path.
+The active Sentinel code is organized as follows:
 
-### 3. Stale-quote protection + low-latency IPC + DuckDB
-The C++ engine rejects orders whose latest quote exceeds `max_quote_age_us`. `sentinel_zmq_bench` measures local ZeroMQ IPC latency, while `scripts/benchmark_duckdb.py` writes 10M ticks asynchronously in batches.
+| Path | Purpose |
+| --- | --- |
+| `python/sentinel_statarb/` | Strategy, synthetic data generation, portfolio backtest, DuckDB replay, Cryptofeed bridge |
+| `sentinel/` | C++ execution engine, ZeroMQ process, SPSC queue integration, benchmarks |
+| `scripts/` | Setup, backtest, replay, benchmark and system-profile entry points |
+| `tests/` | Python tests and C++ smoke coverage |
+| `docs/` | Architecture, research methodology and reproducible figures |
+| `vendor/rigtorp/` | Pinned Rigtorp SPSCQueue header and license |
+| `sentCryptofeed/`, `sentSrc/`, `sentTests/` | Retained historical/provenance trees from the earlier source merge; not part of the active build |
 
-## Quick start
+The repository also contains material from the upstream financial-models project used during the original source composition. Those notebooks and files are not required for the active Sentinel build.
 
-### Python research/backtest
+## 1. Run it on Ubuntu
+
+From a fresh clone:
 
 ```bash
-python -m venv .venv
+git clone https://github.com/SpryzenHell/sentinel_statarb.git
+cd sentinel_statarb
+
+bash scripts/setup_ubuntu.sh
 source .venv/bin/activate
-pip install -e '.[full]'  # use '.[full,live]' for the optional Cryptofeed live bridge
+```
+
+The setup script installs the compiler/build tools, ZeroMQ development headers, Python virtual-environment support, the Python dependencies, and the C++ targets.
+
+Verify the installation:
+
+```bash
+python scripts/verify_installation.py
+```
+
+Run the complete test suite:
+
+```bash
+make test
+```
+
+Run the main synthetic backtest:
+
+```bash
+make backtest
+```
+
+Run the small end-to-end DuckDB replay demonstration:
+
+```bash
+make replay
+```
+
+At this point no exchange connection, API key, historical dataset, or user-specific configuration is required. The default demonstration uses deterministic synthetic data.
+
+## 2. What the main commands do
+
+### Python backtest
+
+The default command is:
+
+```bash
 python scripts/run_backtest.py
 ```
 
-The backtest now uses explicit two-leg portfolio accounting: A and B positions, bid/ask execution, configurable commission, explicit slippage, turnover, exposure, trade-level PnL, and equity-based drawdown.
+It writes:
 
-Tune the execution assumptions directly:
+```text
+results/backtest.json
+```
+
+The backtest has explicit two-leg accounting. It marks A and B separately, crosses the bid/ask when filling, applies configurable slippage and commission, tracks turnover and exposure, and calculates equity-based drawdown.
+
+The signal-to-fill delay defaults to one tick. It can be changed together with the main strategy parameters:
 
 ```bash
 python scripts/run_backtest.py \
+  --entry-z 2.0 \
+  --exit-z 0.5 \
+  --window 200 \
+  --execution-delay-ticks 1 \
   --target-notional 10000 \
   --commission-bps 0.40 \
-  --slippage-bps 1.00 \
-  --execution-delay-ticks 1 \
-  --entry-z 2.0 --exit-z 0.5 --window 200
+  --slippage-bps 1.00
 ```
 
-Run a sensitivity sweep over multiple execution-cost assumptions and crash locations:
+### Cost and crash sensitivity
 
 ```bash
 python scripts/sensitivity_backtest.py \
@@ -51,146 +102,312 @@ python scripts/sensitivity_backtest.py \
   --cost-pairs '0:0,0.4:1,1:2,2:5,5:5'
 ```
 
-The sweep writes `results/backtest_sensitivity.json`. These cost rates are research assumptions, not claims about a particular venue's fee schedule.
+The result is written to `results/backtest_sensitivity.json`.
 
-Replay persisted telemetry from DuckDB through the same research and portfolio engine:
+### Multi-seed robustness
 
 ```bash
-python scripts/replay_duckdb.py --db results/telemetry.duckdb --limit 100000
+python scripts/robustness_backtest.py
 ```
 
-DuckDB rows are streamed in batches, so the replay path does not materialize the full dataset in Python memory.
+This varies deterministic seeds and crash locations. It is intended to show how sensitive the result is to the generated scenario rather than to provide a single headline number.
 
-### C++ core
+### Strategy parameter sensitivity
+
+```bash
+python scripts/parameter_sensitivity.py
+```
+
+This varies entry threshold, exit threshold and rolling window. The ranking is scenario-dependent and is not a claim that the top parameter set is optimal in live trading.
+
+## 3. Build and run the C++ execution engine
+
+The active C++ targets are built with CMake:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
-./build/sentinel/sentinel_spsc_bench
 ```
 
-### ZeroMQ execution process
-
-On Linux with the libzmq development package installed:
+The basic engine smoke test can also be run directly:
 
 ```bash
-sudo apt-get install libzmq3-dev
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-python scripts/benchmark_ipc.py --orders 10000
+./build/sentinel/sentinel_engine_smoke
 ```
 
-### 10M+ DuckDB logging benchmark
+The executable accepts `--help` and supports the runtime and paper-execution parameters used by the research model:
 
 ```bash
-python scripts/benchmark_duckdb.py --ticks 10000000 --batch 100000
+./build/sentinel/sentinel_exec --help
 ```
 
-The 10M-row run is intentionally separate from the default smoke tests because it is a heavier storage benchmark.
-
-## Linux/HPC runtime profile
-
-The execution process accepts optional runtime controls:
+A typical local process invocation is:
 
 ```bash
-./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4
-./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4 --mlock
-./build/sentinel/sentinel_exec ipc:///tmp/sentinel_exec_in.ipc --cpu 4 --fifo 20 \
-  --slippage-bps 1 --commission-bps 0.4 --oco-stop-bps 5 --oco-limit-bps 5 \
+./build/sentinel/sentinel_exec \
+  ipc:///tmp/sentinel_exec_in.ipc \
+  --slippage-bps 1 \
+  --commission-bps 0.4 \
+  --oco-stop-bps 5 \
+  --oco-limit-bps 5 \
   --max-quote-age-us 250
 ```
 
-`--cpu` pins the execution thread to one logical CPU. `--slippage-bps`, `--commission-bps`, `--oco-stop-bps`, `--oco-limit-bps`, and `--max-quote-age-us` configure the paper-execution model exposed by the same C++ engine. `--mlock` requests `mlockall`; `--fifo` requests `SCHED_FIFO`. The process reports whether each request succeeded. These controls can require elevated privileges or scheduler limits on the host.
-
-Capture host state before benchmarking:
+For Linux hosts, optional CPU pinning, memory locking and FIFO scheduling controls are available:
 
 ```bash
-python scripts/system_profile.py > results/system_profile.json
+./build/sentinel/sentinel_exec \
+  ipc:///tmp/sentinel_exec_in.ipc \
+  --cpu 4 --mlock --fifo 20
 ```
 
-Direct C++ engine measurement with CPU pinning:
+These options depend on the permissions and scheduler configuration of the host.
+
+## 4. Run the end-to-end IPC tests
+
+The repository includes a Python-to-C++ driver:
+
+```bash
+python scripts/benchmark_ipc.py --orders 10000
+```
+
+A strategy replay drives the C++ engine through the same ZeroMQ boundary:
+
+```bash
+python scripts/run_replay.py --ticks 5000
+```
+
+These commands build the executable first, then create the local IPC endpoints needed for the test.
+
+## 5. Telemetry and DuckDB replay
+
+The C++ execution process copies tick/report telemetry into a bounded SPSC queue. A Python subscriber moves that data through a bounded work queue and writes it to DuckDB.
+
+For a small reproducible replay:
+
+```bash
+python scripts/generate_sample_telemetry_db.py --ticks 5000
+python scripts/replay_duckdb.py \
+  --db results/sample_telemetry.duckdb
+```
+
+For the connected telemetry path:
+
+```bash
+python scripts/benchmark_telemetry.py \
+  --ticks 100000 \
+  --batch 10000
+```
+
+The larger storage benchmark can be run separately:
+
+```bash
+python scripts/benchmark_duckdb.py \
+  --ticks 10000000 \
+  --batch 100000
+```
+
+The 10M-row command is intentionally not part of the normal quick verification because it is a longer storage benchmark.
+
+## 6. Optional Cryptofeed live bridge
+
+The live adapter is optional. Install it only when live market-data access is required:
+
+```bash
+source .venv/bin/activate
+pip install -e '.[full,live]'
+```
+
+The default bridge configuration is Coinbase with BTC-USD and ETH-USD:
+
+```bash
+python -m sentinel_statarb.feed \
+  --endpoint ipc:///tmp/sentinel_exec_in.ipc \
+  --exchange COINBASE \
+  --symbol-a BTC-USD \
+  --symbol-b ETH-USD
+```
+
+Start `sentinel_exec` before starting the feed bridge.
+
+The bridge normalizes the best bid/ask from both books into the packed `TickMessage` format used by the C++ process. Network access is required for this mode. The live bridge is deliberately separate from the deterministic tests, so the default repository verification does not depend on an exchange being available.
+
+## 7. Docker
+
+A Dockerfile is provided for a clean, isolated run.
+
+Build:
+
+```bash
+docker build -t sentinel-statarb .
+```
+
+Run the default backtest:
+
+```bash
+docker run --rm sentinel-statarb
+```
+
+The image installs the Python package, builds the C++ targets and starts with the same deterministic backtest used by the normal quick-start path.
+
+For users on Windows or macOS who do not want to set up the native Linux toolchain, Docker is the simplest way to reproduce the project environment.
+
+## 8. Benchmarks
+
+The project has separate benchmarks for the execution core, SPSC queue, ZeroMQ transport, end-to-end IPC, strategy replay and DuckDB storage.
+
+A historical GitHub Actions run (#41, 2026-10-03) recorded the following results:
+
+| Measurement | Recorded result |
+| --- | ---: |
+| Python tests | 2/2 passed |
+| C++ CTest | 3/3 passed |
+| C++ execution core | 0.070 µs median · 0.080 µs p99 · 0.130 µs p99.9 |
+| Rigtorp SPSC | 164.372 Mops/s for 5M items |
+| Python → ZeroMQ → C++ | 768.774 orders/s for 1,000 orders |
+| Strategy → C++ replay | 8,592.639 ticks/s for 5,000 ticks |
+| ZeroMQ transport | 39.082 µs median · 47.499 µs p99 · 59.230 µs p99.9 |
+| Async DuckDB logging | 10,000,000 rows at 2,662,236 rows/s |
+
+These are historical measurements from that runner. The active branch has changed since that run, so the values above are evidence of the recorded run, not a claim about the current commit.
+
+For a new measurement:
+
+```bash
+python scripts/system_profile.py | tee results/system_profile.json
+./build/sentinel/sentinel_engine_bench 200000
+./build/sentinel/sentinel_spsc_bench
+./build/sentinel/sentinel_zmq_bench 10000
+./build/sentinel/sentinel_zmq_oneway 200000 -1 -1
+```
+
+On a Linux host where CPU pinning is appropriate:
 
 ```bash
 ./build/sentinel/sentinel_engine_bench 200000 --cpu 4
 ```
 
-Connected telemetry benchmark:
+The repository does not treat the terms “HPC”, “sub-10 µs”, or “sub-millisecond” as measured facts unless the corresponding benchmark has actually been run and preserved.
+
+## 9. Figures and implementation diagrams
+
+The figures in this README are generated from the repository's implementation and recorded benchmark data. There are no fabricated product screenshots or placeholder performance charts.
+
+### Runtime topology
+
+![Sentinel StatArb runtime topology](docs/images/architecture.svg)
+
+### Signal and execution timing
+
+![Signal to fill path](docs/images/signal_execution.svg)
+
+### OCO stop-limit behavior
+
+![OCO stop-limit example](docs/images/oco_stop_limit.svg)
+
+The OCO example uses the same 100.00 entry and 5 bps stop/limit test configuration used in the strategy regression tests. It is an explanation of the state machine, not a market-price recording.
+
+### Historical benchmark record
+
+![Historical benchmark record](docs/images/verified_benchmarks.svg)
+
+### Latency measurements
+
+![Latency measurements](docs/images/latency.svg)
+
+### Throughput measurements
+
+![Throughput measurements](docs/images/throughput.svg)
+
+### Active project layout
+
+![Active project layout](docs/images/project_layout.svg)
+
+## 10. Research model
+
+The current strategy has four main pieces:
+
+1. A scalar Kalman regression estimates the hedge ratio between the two instruments.
+2. The spread is formed from the two midpoint prices and standardized with a rolling sample standard deviation.
+3. A volatility-aware debouncer increases the confirmation count as observed volatility rises.
+4. An OCO stop-limit bracket is armed for an active spread position.
+
+The portfolio layer is separate from the signal layer. It handles actual A/B quantities, execution costs, cash and exposure. The same `run_ticks()` function is used for generated scenarios and streamed DuckDB replays.
+
+The research methodology is documented in [docs/RESEARCH_METHODOLOGY.md](docs/RESEARCH_METHODOLOGY.md). The runtime ownership and queue design are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## 11. Tests and checks
+
+Python tests:
 
 ```bash
-python scripts/benchmark_telemetry.py --ticks 10000000 --batch 100000 --cpu 4
+python -m pytest -q
 ```
 
-The last command measures the C++ telemetry queue → ZeroMQ PUB/SUB → asynchronous DuckDB path. Use the host profile and benchmark artifact when discussing latency claims.
+C++ tests:
 
-## Backtest accounting model
+```bash
+ctest --test-dir build --output-on-failure
+```
 
-The research engine deliberately separates signal generation from portfolio accounting:
+Installation check:
 
-- A long spread buys A and sells `beta × B`; a short spread does the opposite.
-- Position size is scaled to a configurable gross-notional target.
-- Buys cross the ask and sells cross the bid; an additional configurable bps slippage is then applied adversely.
-- Commission is charged independently on each filled leg.
-- Equity is marked from the two-leg mid-market portfolio value, while drawdown is calculated from the resulting equity curve.
-- Trade PnL includes entry and exit execution costs; the output also reports fees, bid/ask crossing cost, explicit slippage, total cost, turnover, return, max drawdown in currency and percent, best/worst trade, profit factor, and max gross/net exposure.
-- The synthetic flash-crash metric is the positive equity loss from the tick immediately before the crash to the lowest equity observed in the following 45 ticks.
+```bash
+python scripts/verify_installation.py
+```
 
-This remains a simplified paper-trading model: it does not model exchange-specific queue position, partial fills, borrow constraints, financing, funding, or market impact.
+C++ sanitizer smoke tests are also defined in GitHub Actions. The standard CI workflow covers Python syntax/tests, C++ compilation, CTest, research scripts, IPC, telemetry, replay and benchmark commands.
 
-## Latest verified run
+## 12. Supported environment
 
-Verified in GitHub Actions on **2026-10-03**, run #41, Ubuntu x86_64, C++20/GCC 13.3, Python 3.12, with libzmq3-dev and DuckDB 1.5.6.
+The native setup is maintained and tested around:
 
-| Measurement | Result |
-|---|---:|
-| Python unit tests | 2/2 passed |
-| C++ CTest suite | 3/3 passed |
-| Direct C++ execution core | **0.070 us median / 0.080 us p99 / 0.130 us p99.9** |
-| Rigtorp SPSC benchmark | **164.372 Mops/s**, 5M items |
-| Python -> ZeroMQ -> C++ E2E | **768.774 orders/s**, 1,000 orders |
-| Python strategy -> C++ execution replay | **5,000 ticks**, 5 entries, 5 exits, 10 execution reports |
-| Replay throughput | **8,592.639 ticks/s** |
-| ZeroMQ IPC transport | **39.082 us median / 47.499 us p99 / 59.230 us p99.9** |
-| Async DuckDB logging | **10,000,000 rows**, **2,662,236 rows/s** |
+- Ubuntu 24.04
+- Python 3.12
+- C++20
+- CMake 3.20 or newer
+- libzmq 4.x development headers
+- Git
 
-The current branch contains newer research/accounting changes after run #41, including two-leg execution accounting, DuckDB replay, and constant-time rolling statistics; those changes should be treated as **pending fresh CI verification** until the corresponding workflow completes.
+Ubuntu/Debian systems are the primary native target. Docker is provided for users who prefer a containerized environment.
 
-The direct C++ core measurement supports a sub-millisecond **core-function benchmark** on this runner. It does not establish the original resume's separate “HPC” environment claim.
+Windows and macOS native execution are not treated as release targets in this repository. Docker or a Linux environment such as WSL2 is recommended there.
 
-The ZeroMQ measurement is **not** sub-10 us on this runner, so that number should not be stated as a verified resume result without a dedicated target-hardware benchmark.
+## 13. What is not included
 
-The strategy comparison is deterministic synthetic data. The older run's protection result is a benchmark on that synthetic scenario, not a claim about live trading performance.
+The default repository run does not require anything outside the repository, but several optional capabilities naturally need external inputs:
 
-## Research methodology
+- live market data requires network connectivity;
+- private exchange feeds would require the credentials and configuration for that venue;
+- replaying a real historical dataset requires that dataset to be supplied;
+- venue-specific fees, borrow, funding, queue position and market impact are not modeled by the current paper executor.
 
-The detailed signal, execution, risk, sensitivity, and evidence methodology is documented in [docs/RESEARCH_METHODOLOGY.md](docs/RESEARCH_METHODOLOGY.md).
+Those are extension points rather than prerequisites for the deterministic demo and test suite.
 
-## Reproducibility
+## 14. Source provenance and licenses
 
-All research benchmarks use fixed seeds and write machine-readable JSON results under `results/`. Latency/throughput numbers belong in this README only after the corresponding benchmark has actually been run on the target hardware.
+The original project composition used:
 
-## Upstream provenance
+- Cryptofeed
+- Financial-Models-Numerical-Methods
+- Rigtorp SPSCQueue
 
-The intended source composition was supplied in `INPUT_projects.json`: Cryptofeed, Financial-Models-Numerical-Methods and Rigtorp SPSCQueue. Their upstream roles are preserved as provenance; the active Sentinel layer is project-specific integration code.
+Pinned source references and the reason for keeping the historical merged trees are recorded in [PROVENANCE.md](PROVENANCE.md).
 
-Upstream projects:
+Third-party licensing information is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Project licensing is in [LICENSE](LICENSE).
 
-- https://github.com/bmoscon/cryptofeed
-- https://github.com/cantaro86/Financial-Models-Numerical-Methods
-- https://github.com/rigtorp/SPSCQueue
+## 15. Development and contribution
 
-The existing `sentCryptofeed/`, `sentSrc/`, and `sentTests/` trees are retained for provenance but are not imported by the active package because the previous automated merge altered source syntax.
+The normal local cycle is:
 
-## Truthful benchmark policy
+```bash
+source .venv/bin/activate
+make test
+make backtest
+make replay
+```
 
-This repository does not claim “HPC”, “10M+ DuckDB”, “sub-10us”, or “sub-millisecond” as measured facts merely because the implementation supports those targets. The corresponding command and result file are the evidence record.
+For a larger change, run the relevant benchmark after the code change and keep the output with the CI artifacts or benchmark record. Do not copy performance numbers from another machine and present them as local measurements.
 
-## Development window
-
-The supplied project configuration lists the intended project window as **2026-02-01 through 2026-05-31**. That configuration is retained as input metadata; new commits use their real commit timestamps.
-
-## Heavy benchmark
-
-The repository also contains `.github/workflows/sentinel-heavy-benchmark.yml`, a manual GitHub Actions workflow for the connected 10M+ telemetry benchmark. It accepts `ticks` and `cpu` inputs and uploads the resulting host profile, telemetry results, and direct-engine latency artifact.
-
-Use this workflow when you need a fresh hardware-specific performance record; do not copy benchmark numbers between machines.
+The project window recorded in `INPUT_projects.json` is 2026-02-01 through 2026-05-31. New commits are made with their actual commit timestamps.

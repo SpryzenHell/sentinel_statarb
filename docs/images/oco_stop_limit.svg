@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680">
+<rect width="100%" height="100%" fill="#fbfaf7"/>
+<text x="56" y="58" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#26373e">OCO stop-limit behavior</text>
+<text x="56" y="91" font-family="Arial,Helvetica,sans-serif" font-size="16" fill="#607178">Example from the strategy regression configuration; not a live market-price series</text>
+
+<style>.axis{stroke:#556a72;stroke-width:1.5}.entry{stroke:#64777e;stroke-width:2;stroke-dasharray:7 5}.stop{stroke:#a76250;stroke-width:2.5}.limit{stroke:#4d7d69;stroke-width:2.5}.path{stroke:#2f5964;stroke-width:3;fill:none}.pt1{fill:#a76250}.pt2{fill:#4d7d69}.t{font-family:Arial,Helvetica,sans-serif;fill:#2d4149}.s{font-size:15px}.h{font-size:20px;font-weight:700}</style>
+<line class="axis" x1="100" y1="560" x2="1120" y2="560"/><line class="axis" x1="100" y1="120" x2="100" y2="560"/>
+<line class="entry" x1="100" y1="200" x2="1120" y2="200"/><line class="stop" x1="100" y1="320" x2="1120" y2="320"/><line class="limit" x1="100" y1="440" x2="1120" y2="440"/>
+<path class="path" d="M120 520 L260 470 L405 350 L545 330 L610 465 L700 440 L825 305 L960 225 L1080 165"/>
+<circle class="pt1" cx="610" cy="465" r="8"/><circle class="pt2" cx="700" cy="440" r="8"/>
+<text class="t h" x="100" y="85">OCO stop-limit behavior</text>
+<text class="t s" x="925" y="190">entry 100.00</text><text class="t s" x="925" y="310">stop 99.95</text><text class="t s" x="925" y="430">limit 99.90</text>
+<text class="t s" x="525" y="515">stop trigger</text><text class="t s" x="690" y="488">limit becomes marketable</text>
+<text class="t s" x="100" y="615">The example matches the strategy test configuration: entry_spread=100, reference_notional=100, stop_bps=5, limit_bps=5.</text>
+
+</svg>

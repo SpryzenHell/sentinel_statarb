@@ -7,7 +7,7 @@ if ! command -v apt-get >/dev/null 2>&1; then
 fi
 
 sudo apt-get update
-sudo apt-get install -y build-essential cmake git pkg-config libzmq3-dev python3 python3-pip python3-venv
+sudo apt-get install -y   build-essential   cmake   git   pkg-config   libzmq3-dev   python3   python3-pip   python3-venv
 
 python3 -m venv .venv
 . .venv/bin/activate
@@ -20,5 +20,6 @@ cmake --build build --parallel
 echo
 echo "Setup complete."
 echo "Activate with: source .venv/bin/activate"
-echo "Run tests with: python -m pytest -q && ctest --test-dir build --output-on-failure"
-echo "Run the backtest with: python scripts/run_backtest.py"
+echo "Verify with: python scripts/verify_installation.py"
+echo "Run tests with: make test"
+echo "Run the backtest with: make backtest"
