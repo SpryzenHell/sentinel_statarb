@@ -106,6 +106,16 @@ def test_negative_execution_delay_is_rejected():
         run_ticks([], execution_delay_ticks=-1)
 
 
+def test_strategy_parameter_validation_is_enforced():
+    ticks = generate_path(seed=7, n=100)
+    with pytest.raises(ValueError, match="entry_z"):
+        run_ticks(ticks, entry_z=0.0)
+    with pytest.raises(ValueError, match="exit_z"):
+        run_ticks(ticks, entry_z=2.0, exit_z=2.0)
+    with pytest.raises(ValueError, match="window"):
+        run_ticks(ticks, window=1)
+
+
 def test_run_ticks_accepts_streaming_iterables():
     ticks = generate_path(seed=5, n=500, crash_at=250)
     result = run_ticks(iter(ticks), dynamic=True, seed=-1, crash_at=250)
