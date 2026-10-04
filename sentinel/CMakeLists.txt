@@ -57,6 +57,7 @@ if(LIBZMQ_FOUND)
 
   add_test(NAME sentinel_zmq_bench COMMAND sentinel_zmq_bench 1000)
   add_test(NAME sentinel_zmq_oneway COMMAND sentinel_zmq_oneway 1000)
+  add_test(NAME sentinel_exec_help COMMAND sentinel_exec --help)
 else()
   message(WARNING "libzmq development headers not found; ZeroMQ targets/tests are skipped")
 endif()
