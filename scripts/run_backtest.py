@@ -21,6 +21,9 @@ def main() -> None:
     parser.add_argument("--execution-delay-ticks", type=int, default=1)
     args = parser.parse_args()
 
+    if args.execution_delay_ticks < 0:
+        raise SystemExit("--execution-delay-ticks must be non-negative")
+
     execution = ExecutionConfig(
         initial_cash=args.initial_cash,
         target_gross_notional=args.target_notional,
@@ -48,14 +51,15 @@ def main() -> None:
     )
     payload = {
         "execution": execution.__dict__,
+        "execution_delay_ticks": args.execution_delay_ticks,
         "baseline": baseline.__dict__,
         "dynamic": dynamic.__dict__,
         "delta_pnl": dynamic.pnl - baseline.pnl,
         "delta_flash_crash_loss": dynamic.flash_crash_loss - baseline.flash_crash_loss,
         "claim_note": (
             "Synthetic deterministic path with two-leg bid/ask execution, "
-            "configurable commissions and slippage; values are benchmark outputs, "
-            "not live-market performance."
+            "configurable commissions/slippage, and a configurable signal-to-fill delay; "
+            "values are benchmark outputs, not live-market performance."
         ),
     }
     path = out / "backtest.json"
