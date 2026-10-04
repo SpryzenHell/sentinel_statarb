@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680">
+<rect width="100%" height="100%" fill="#11171b"/>
+<rect x="42" y="38" width="1116" height="604" rx="12" fill="#182126" stroke="#3b535c" stroke-width="2"/>
+<circle cx="72" cy="69" r="7" fill="#6d7d82"/><circle cx="96" cy="69" r="7" fill="#6d7d82"/><circle cx="120" cy="69" r="7" fill="#6d7d82"/>
+<text x="58" y="115" font-family="monospace" font-size="17" fill="#b9c7cb">$ ./build/sentinel/sentinel_engine_bench 200000</text>
+<text x="58" y="150" font-family="monospace" font-size="17" fill="#c8d4d8">orders=200000 median_us=0.070 p99_us=0.080 p99_9_us=0.130</text>
+<text x="58" y="185" font-family="monospace" font-size="17" fill="#c8d4d8">fills=200000 stale_rejects=0</text>
+<text x="58" y="235" font-family="monospace" font-size="17" fill="#b9c7cb">$ ./build/sentinel/sentinel_spsc_bench</text>
+<text x="58" y="270" font-family="monospace" font-size="17" fill="#c8d4d8">items=5000000 throughput_mops=164.372</text>
+<text x="58" y="320" font-family="monospace" font-size="17" fill="#b9c7cb">$ python scripts/run_replay.py --ticks 5000</text>
+<text x="58" y="355" font-family="monospace" font-size="17" fill="#c8d4d8">ticks_replayed=5000 strategy_entries=5 strategy_exits=5 execution_reports=10</text>
+<text x="58" y="390" font-family="monospace" font-size="17" fill="#c8d4d8">ticks_per_sec=8592.639</text>
+<text x="58" y="440" font-family="monospace" font-size="17" fill="#b9c7cb">$ python scripts/benchmark_duckdb.py --ticks 10000000 --batch 100000</text>
+<text x="58" y="475" font-family="monospace" font-size="17" fill="#c8d4d8">rows_written=10000000 rows_per_sec=2662236.348</text>
+<text x="58" y="555" font-family="Arial,Helvetica,sans-serif" font-size="15" fill="#75868c">Recorded values from GitHub Actions run #41, 2026-10-03.</text>
+<text x="58" y="583" font-family="Arial,Helvetica,sans-serif" font-size="15" fill="#75868c">This is a rendered record of command output, not a live screenshot or current-run guarantee.</text>
+</svg>
