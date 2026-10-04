@@ -20,6 +20,7 @@ struct EngineState {
   std::uint64_t orders{0};
   std::uint64_t fills{0};
   std::uint64_t stale_rejects{0};
+  std::uint64_t invalid_ticks{0};
   std::uint64_t stop_events{0};
   double cash{0.0};
   double position_a{0.0};
