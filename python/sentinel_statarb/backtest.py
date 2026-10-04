@@ -21,6 +21,7 @@ class BacktestResult:
     label: str
     seed: int
     ticks: int
+    execution_delay_ticks: int
     trades_entered: int
     exits: int
     stop_exits: int
@@ -332,6 +333,7 @@ def run_ticks(
         label="dynamic" if dynamic else "baseline",
         seed=seed,
         ticks=count,
+        execution_delay_ticks=execution_delay_ticks,
         trades_entered=portfolio.trade_count,
         exits=len(trade_pnls),
         stop_exits=strategy.stop_exits,
