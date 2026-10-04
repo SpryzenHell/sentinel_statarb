@@ -1,340 +1,427 @@
 # Sentinel StatArb
 
-## Overview
+![Sentinel StatArb project overview](docs/images/main.png)
 
-**Sentinel StatArb** is a decoupled systematic trading engine and quantitative research framework. It bridges three distinct architectural domains to solve the latency vs. compute bottleneck inherent in modern statistical arbitrage:
+Sentinel StatArb is a small research and execution stack for a two-leg statistical-arbitrage strategy. The research side is written in Python. The latency-sensitive execution side is written in C++20. ZeroMQ is used at the process boundary, a single-producer/single-consumer queue is used inside the execution process, and DuckDB is used for asynchronous telemetry storage.
 
-1. **Market Data Feed Handler (Python):** An asynchronous websocket/REST engine for aggregating real-time Level 2/Level 3 order books and trades across dozens of cryptocurrency exchanges.
-2. **Quantitative Financial Models (Jupyter/Python):** A deep research repository containing implementations of PDE methods, Lévy processes, Fourier methods, and Kalman filters for alpha signal generation.
-3. **Ultra-Low Latency Execution Core (C++):** A wait-free, lock-free Single-Producer Single-Consumer (SPSC) ring buffer with huge page support to route orders between the Python inference cluster and the network interface card in nanoseconds.
+The repository is intended to run from a clean checkout. The quickest supported setup is Ubuntu 24.04 or another current Debian/Ubuntu system with a C++20 compiler. A Docker image is also provided for a self-contained run.
 
----
+## What is in the repository
 
-## Part I: Market Data Feed Handler
+The active Sentinel code is organized as follows:
 
-Handles multiple cryptocurrency exchange data feeds and returns normalized and standardized results to client registered callbacks for events like Trades, Book updates, Ticker updates, etc. Utilizes websockets when possible, but can also poll data via REST endpoints if a websocket is not provided.
+| Path | Purpose |
+| --- | --- |
+| `python/sentinel_statarb/` | Strategy, synthetic data generation, portfolio backtest, DuckDB replay, Cryptofeed bridge |
+| `sentinel/` | C++ execution engine, ZeroMQ process, SPSC queue integration, benchmarks |
+| `scripts/` | Setup, backtest, replay, benchmark and system-profile entry points |
+| `tests/` | Python tests and C++ smoke coverage |
+| `docs/` | Architecture, research methodology and reproducible figures |
+| `vendor/rigtorp/` | Pinned Rigtorp SPSCQueue header and license |
+| `sentCryptofeed/`, `sentSrc/`, `sentTests/` | Retained historical/provenance trees from the earlier source merge; not part of the active build |
 
-### Supported Exchanges
+The repository also contains material from the upstream financial-models project used during the original source composition. Those notebooks and files are not required for the active Sentinel build.
 
-* AscendEX
-* Bequant
-* Bitfinex
-* bitFlyer
-* Bithumb
-* Bitstamp
-* Blockchain.com
-* Bybit
-* Binance (Standard, Delivery, Futures, US)
-* Bit.com
-* Bitget
-* BitMEX
-* Coinbase
-* Crypto.com
-* Delta
-* Deribit
-* dYdX
-* FMFW.io
-* EXX
-* Gate.io (Standard, Futures)
-* Gemini
-* HitBTC
-* Huobi (Standard, DM, Swap Coin-M and USDT-M)
-* Independent Reserve
-* Kraken (Standard, Futures)
-* KuCoin
-* OKCoin
-* OKX
-* Phemex
-* Poloniex
-* ProBit
-* Upbit
+## 1. Run it on Ubuntu
 
-### Basic Usage
-
-Create a `FeedHandler` object and add subscriptions. For the various data channels that an exchange supports, you can supply callbacks for data events, or use provided backends (described below) to handle the data for you. 
-
-```python
-from sentinel_statarb import FeedHandler
-from sentinel_statarb.exchanges import Coinbase, Bitfinex, Poloniex, Gemini
-from sentinel_statarb.defines import TICKER, TRADES, L2_BOOK
-
-fh = FeedHandler()
-
-# ticker, trade, and book are user defined functions that
-# will be called when Ticker, Trade and Book updates are received
-ticker_cb = {TICKER: ticker}
-trade_cb = {TRADES: trade}
-gemini_cb = {TRADES: trade, L2_BOOK: book}
-
-fh.add_feed(Coinbase(symbols=['BTC-USD'], channels=[TICKER], callbacks=ticker_cb))
-fh.add_feed(Bitfinex(symbols=['BTC-USD'], channels=[TICKER], callbacks=ticker_cb))
-fh.add_feed(Poloniex(symbols=['BTC-USDT'], channels=[TRADES], callbacks=trade_cb))
-fh.add_feed(Gemini(symbols=['BTC-USD', 'ETH-USD'], channels=[TRADES, L2_BOOK], callbacks=gemini_cb))
-
-fh.run()
-
-```
-
-### National Best Bid/Offer (NBBO)
-
-Sentinel StatArb provides a synthetic NBBO feed that aggregates the best bids and asks from the user-specified feeds.
-
-```python
-from sentinel_statarb import FeedHandler
-from sentinel_statarb.exchanges import Coinbase, Gemini, Kraken
-
-def nbbo_update(symbol, bid, bid_size, ask, ask_size, bid_feed, ask_feed):
-    print(f'Pair: {symbol} Bid Price: {bid:.2f} Bid Size: {bid_size:.6f} Bid Feed: {bid_feed} Ask Price: {ask:.2f} Ask Size: {ask_size:.6f} Ask Feed: {ask_feed}')
-
-def main():
-    f = FeedHandler()
-    f.add_nbbo([Coinbase, Kraken, Gemini], ['BTC-USD'], nbbo_update)
-    f.run()
-
-```
-
-### Supported Channels
-
-#### Market Data Channels (Public)
-
-* `L1_BOOK` - Top of book
-* `L2_BOOK` - Price aggregated sizes. Some exchanges provide the entire depth, some provide a subset.
-* `L3_BOOK` - Price aggregated orders. Like the L2 book, some exchanges may only provide partial depth.
-* `TRADES` - Note this reports the taker's side, even for exchanges that report the maker side.
-* `TICKER`
-* `FUNDING`
-* `OPEN_INTEREST` - Open interest data.
-* `LIQUIDATIONS`
-* `INDEX`
-* `CANDLES` - Candlestick / K-Line data.
-
-#### Authenticated Data Channels
-
-* `ORDER_INFO` - Order status updates
-* `TRANSACTIONS` - Real-time updates on account deposits and withdrawals
-* `BALANCES` - Updates on wallet funds
-* `FILLS` - User's executed trades
-
-### Backends & Storage
-
-Sentinel StatArb supports `backend` callbacks that will write directly to storage or other interfaces.
-
-Supported Backends:
-
-* Redis (Streams and Sorted Sets)
-* Arctic
-* ZeroMQ
-* UDP Sockets
-* TCP Sockets
-* Unix Domain Sockets
-* InfluxDB v2
-* MongoDB
-* Kafka
-* RabbitMQ
-* PostgreSQL
-* QuasarDB
-* GCP Pub/Sub
-* QuestDB
-
----
-
-## Part II: Quantitative Financial Models & Numerical Methods
-
-This module contains research environments based on different topics in the area of quantitative finance, specifically targeting topics that are mathematically rigorous such as PDE methods, Lévy processes, Fourier methods, and Kalman filters.
-
-### Core Research Areas
-
-1.1) **Black-Scholes numerical methods**
-*(lognormal distribution, change of measure, Monte Carlo, Binomial Method)*.
-
-1.2) **SDE simulation and statistics**
-*(paths generation, Confidence intervals, Hypothesis testing, Geometric Brownian motion, Cox-Ingersoll-Ross process, Euler Maruyama Method, parameters estimation)*
-
-1.3) **Fourier inversion methods**
-*(inversion formula, numerical inversion, option pricing, FFT, Lewis formula)*
-
-1.4) **SDE, Heston model**
-*(correlated Brownian motions, Heston paths, Heston distribution, characteristic function, option pricing)*
-
-1.5) **SDE, Lévy processes**
-*(Merton, Variance Gamma, NIG, path generation, parameter estimation)*
-
-2.1) **The Black-Scholes PDE**
-*(PDE discretization, Implicit Method, sparse matrix tutorial)*
-
-2.2) **Exotic options**
-*(Binary options, Barrier options, Asian options)*
-
-2.3) **American options**
-*(PDE, Early exercise, Binomial Method, Longstaff-Schwartz, Perpetual put)*
-
-3.1) **Merton Jump-Diffusion PIDE**
-*(Implicit-Explicit discretization, discrete convolution, model limitations, Monte Carlo, Fourier inversion, semi-closed formula)*
-
-3.2) **Variance Gamma PIDE**
-*(approximated jump-diffusion PIDE, Monte Carlo, Fourier inversion, Comparison with Black-Scholes)*
-
-3.3) **Normal Inverse Gaussian PIDE**
-*(approximated jump-diffusion PIDE, Monte Carlo, Fourier inversion, properties of the Lévy measure)*
-
-4.1) **Pricing with transaction costs**
-*(Davis-Panas-Zariphopoulou model, singular control problem, HJB variational inequality, indifference pricing, binomial tree, performances)*
-
-4.2) **Volatility smile and model calibration**
-*(Volatility smile, root finder methods, calibration methods)*
-
-5.1) **Linear regression and Kalman filter**
-*(market data cleaning, Linear regression methods, Kalman filter design, choice of parameters)*
-
-5.2) **Kalman auto-correlation tracking - AR(1) process**
-*(Autoregressive process, estimation methods, Kalman filter, Kalman smoother, variable autocorrelation tracking)*
-
-5.3) **Volatility tracking**
-*(Heston simulation, hypothesis testing, distribution fitting, estimation methods, GARCH(1,1), Kalman filter, Kalman smoother)*
-
-6.1) **Ornstein-Uhlenbeck process and applications**
-*(parameters estimation, hitting time, Vasicek PDE, Kalman filter, trading strategy)*
-
-7.1) **Classical MVO**
-*(mean variance optimization, quadratic programming, only long and long-short, closed formula)*
-
-A.1) **Appendix: Linear equations**
-*(LU, Jacobi, Gauss-Seidel, SOR, Thomas)*
-
-A.2) **Appendix: Code optimization**
-*(cython, C code)*
-
-A.3) **Appendix: Review of Lévy processes theory**
-*(basic and important definitions, derivation of the pricing PIDE)*
-
-### Environment Setup
-
-You can recreate the tested conda virtual environment with:
+From a fresh clone:
 
 ```bash
-conda env create -f environment.yml
-pip install -e .
+git clone https://github.com/SpryzenHell/sentinel_statarb.git
+cd sentinel_statarb
 
+bash scripts/setup_ubuntu.sh
+source .venv/bin/activate
 ```
 
-Alternatively, to run the environment via Docker:
+The setup script installs the compiler/build tools, ZeroMQ development headers, Python virtual-environment support, the Python dependencies, and the C++ targets.
+
+Verify the installation:
 
 ```bash
-docker-compose up --build -d
-
+python scripts/verify_installation.py
 ```
 
----
+Run the complete test suite:
 
-## Part III: Ultra-Low Latency Execution Queue (SPSC)
-
-A single producer single consumer wait-free and lock-free fixed-size queue written in C++11. This implementation is designed to bridge the network thread and the trading algorithm thread with deterministic sub-microsecond latency.
-
-### Example
-
-```cpp
-#include "SPSCQueue.h"
-#include <iostream>
-#include <thread>
-
-SPSCQueue<int> q(1);
-auto t = std::thread([&] {
-  while (!q.front());
-  std::cout << *q.front() << std::endl;
-  q.pop();
-});
-q.push(1);
-t.join();
-
+```bash
+make test
 ```
 
-### Usage API
+Run the complete local demonstration in one command:
 
-* `SPSCQueue<T>(size_t capacity);`
-Create a `SPSCQueue` holding items of type `T` with capacity `capacity`. Capacity needs to be at least 1.
-* `void emplace(Args &&... args);`
-Enqueue an item using inplace construction. Blocks if queue is full.
-* `bool try_emplace(Args &&... args);`
-Try to enqueue an item using inplace construction. Returns `true` on success and `false` if queue is full.
-* `void push(const T &v);`
-Enqueue an item using copy construction. Blocks if queue is full.
-* `T *front();`
-Return pointer to front of queue. Returns `nullptr` if queue is empty.
-* `void pop();`
-Dequeue first item of queue. You must ensure that the queue is non-empty before calling pop. This means that `front()` must have returned a non-`nullptr` before each call to `pop()`. Requires `std::is_nothrow_destructible<T>::value == true`.
-
-Only a single writer thread can perform enqueue operations and only a single reader thread can perform dequeue operations. Any other usage is invalid.
-
-### Huge Page Support
-
-In addition to supporting custom allocation through the standard custom allocator interface, this library also supports standard proposal P0401R3 (Providing size feedback in the Allocator interface). This allows convenient use of huge pages without wasting any allocated space.
-
-Below is an example huge page allocator for Linux:
-
-```cpp
-#include <sys/mman.h>
-
-template <typename T> struct Allocator {
-  using value_type = T;
-
-  struct AllocationResult {
-    T *ptr;
-    size_t count;
-  };
-
-  size_t roundup(size_t n) { return (((n - 1) >> 21) + 1) << 21; }
-
-  AllocationResult allocate_at_least(size_t n) {
-    size_t count = roundup(sizeof(T) * n);
-    auto p = static_cast<T *>(mmap(nullptr, count, PROT_READ | PROT_WRITE,
-                                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB,
-                                   -1, 0));
-    if (p == MAP_FAILED) {
-      throw std::bad_alloc();
-    }
-    return {p, count / sizeof(T)};
-  }
-
-  void deallocate(T *p, size_t n) { munmap(p, roundup(sizeof(T) * n)); }
-};
-
+```bash
+make demo
 ```
 
-### Implementation & Physics
+This runs the C++ engine smoke test, the synthetic backtest, creates a small DuckDB dataset and replays it through the research engine.
 
-The underlying implementation is based on a ring buffer.
+Run the main synthetic backtest:
 
-Care has been taken to make sure to avoid any issues with **false sharing** (MESI protocol bouncing). The head and tail indices are aligned and padded to the false sharing range (cache line size). Additionally the slots buffer is padded with the false sharing range at the beginning and end; this prevents false sharing with any adjacent allocations.
+```bash
+make backtest
+```
 
-This implementation has higher throughput than a typical concurrent ring buffer by locally caching the head and tail indices in the writer and reader respectively. The caching increases throughput by reducing the amount of cache coherency traffic across the CPU bus.
+Run the small end-to-end DuckDB replay demonstration:
 
-To understand how that works first consider a read operation in absence of caching: the head index (read index) needs to be updated and thus that cache line is loaded into the L1 cache in exclusive state. The tail (write index) needs to be read in order to check that the queue is not empty and is thus loaded into the L1 cache in shared state. Since a queue write operation needs to read the head index it's likely that a write operation requires some cache coherency traffic to bring the head index cache line back into exclusive state. In the worst case there will be one cache line transition from shared to exclusive for every read and write operation.
+```bash
+make replay
+```
 
-Next consider a queue reader that caches the tail index: if the cached tail index indicates that the queue is empty, then load the tail index into the cached tail index. If the queue was non-empty multiple read operations up until the cached tail index can complete without stealing the writer's tail index cache line's exclusive state. Cache coherency traffic is therefore drastically reduced. An analogous argument can be made for the queue write operation.
+At this point no exchange connection, API key, historical dataset, or user-specific configuration is required. The default demonstration uses deterministic synthetic data.
 
-## License
+## 2. What the main commands do
 
-This project is licensed under the Pirate-Emperor License. See the [LICENSE](LICENSE) file for details.
+### Python backtest
 
-## Author
+The default command is:
 
-**Pirate-Emperor**
+```bash
+python scripts/run_backtest.py
+```
 
-[![Twitter](https://skillicons.dev/icons?i=twitter)](https://twitter.com/PirateKingRahul)
-[![Discord](https://skillicons.dev/icons?i=discord)](https://discord.com/users/1200728704981143634)
-[![LinkedIn](https://skillicons.dev/icons?i=linkedin)](https://www.linkedin.com/in/piratekingrahul)
+It writes:
 
-[![Reddit](https://img.shields.io/badge/Reddit-FF5700?style=for-the-badge&logo=reddit&logoColor=white)](https://www.reddit.com/u/PirateKingRahul)
-[![Medium](https://img.shields.io/badge/Medium-42404E?style=for-the-badge&logo=medium&logoColor=white)](https://medium.com/@piratekingrahul)
+```text
+results/backtest.json
+```
 
-- GitHub: [Pirate-Emperor](https://github.com/Pirate-Emperor)
-- Reddit: [PirateKingRahul](https://www.reddit.com/u/PirateKingRahul/)
-- Twitter: [PirateKingRahul](https://twitter.com/PirateKingRahul)
-- Discord: [PirateKingRahul](https://discord.com/users/1200728704981143634)
-- LinkedIn: [PirateKingRahul](https://www.linkedin.com/in/piratekingrahul)
-- Skype: [Join Skype](https://join.skype.com/invite/yfjOJG3wv9Ki)
-- Medium: [PirateKingRahul](https://medium.com/@piratekingrahul)
+The backtest has explicit two-leg accounting. It marks A and B separately, crosses the bid/ask when filling, applies configurable slippage and commission, tracks turnover and exposure, and calculates equity-based drawdown.
 
-Thank you for visiting this project!
+The signal-to-fill delay defaults to one tick. It can be changed together with the main strategy parameters:
 
----
+```bash
+python scripts/run_backtest.py \
+  --entry-z 2.0 \
+  --exit-z 0.5 \
+  --window 200 \
+  --execution-delay-ticks 1 \
+  --target-notional 10000 \
+  --commission-bps 0.40 \
+  --slippage-bps 1.00
+```
+
+### Cost and crash sensitivity
+
+```bash
+python scripts/sensitivity_backtest.py \
+  --ticks 50000 \
+  --crash-at 10000,25000,40000 \
+  --cost-pairs '0:0,0.4:1,1:2,2:5,5:5'
+```
+
+The result is written to `results/backtest_sensitivity.json`.
+
+### Multi-seed robustness
+
+```bash
+python scripts/robustness_backtest.py
+```
+
+This varies deterministic seeds and crash locations. It is intended to show how sensitive the result is to the generated scenario rather than to provide a single headline number.
+
+### Strategy parameter sensitivity
+
+```bash
+python scripts/parameter_sensitivity.py
+```
+
+This varies entry threshold, exit threshold and rolling window. The ranking is scenario-dependent and is not a claim that the top parameter set is optimal in live trading.
+
+## 3. Build and run the C++ execution engine
+
+The active C++ targets are built with CMake:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+The basic engine smoke test can also be run directly:
+
+```bash
+./build/sentinel/sentinel_engine_smoke
+```
+
+The executable accepts `--help` and supports the runtime and paper-execution parameters used by the research model:
+
+```bash
+./build/sentinel/sentinel_exec --help
+```
+
+A typical local process invocation is:
+
+```bash
+./build/sentinel/sentinel_exec \
+  ipc:///tmp/sentinel_exec_in.ipc \
+  --slippage-bps 1 \
+  --commission-bps 0.4 \
+  --oco-stop-bps 5 \
+  --oco-limit-bps 5 \
+  --max-quote-age-us 250
+```
+
+For Linux hosts, optional CPU pinning, memory locking and FIFO scheduling controls are available:
+
+```bash
+./build/sentinel/sentinel_exec \
+  ipc:///tmp/sentinel_exec_in.ipc \
+  --cpu 4 --mlock --fifo 20
+```
+
+These options depend on the permissions and scheduler configuration of the host.
+
+## 4. Run the end-to-end IPC tests
+
+The repository includes a Python-to-C++ driver:
+
+```bash
+python scripts/benchmark_ipc.py --orders 10000
+```
+
+A strategy replay drives the C++ engine through the same ZeroMQ boundary:
+
+```bash
+python scripts/run_replay.py --ticks 5000
+```
+
+These commands build the executable first, then create the local IPC endpoints needed for the test.
+
+## 5. Telemetry and DuckDB replay
+
+The C++ execution process copies tick/report telemetry into a bounded SPSC queue. A Python subscriber moves that data through a bounded work queue and writes it to DuckDB.
+
+For a small reproducible replay:
+
+```bash
+python scripts/generate_sample_telemetry_db.py --ticks 5000
+python scripts/replay_duckdb.py \
+  --db results/sample_telemetry.duckdb
+```
+
+For the connected telemetry path:
+
+```bash
+python scripts/benchmark_telemetry.py \
+  --ticks 100000 \
+  --batch 10000
+```
+
+The larger storage benchmark can be run separately:
+
+```bash
+python scripts/benchmark_duckdb.py \
+  --ticks 10000000 \
+  --batch 100000
+```
+
+The 10M-row command is intentionally not part of the normal quick verification because it is a longer storage benchmark.
+
+## 6. Optional Cryptofeed live bridge
+
+The live adapter is optional. Install it only when live market-data access is required:
+
+```bash
+source .venv/bin/activate
+pip install -e '.[full,live]'
+```
+
+The default bridge configuration is Coinbase with BTC-USD and ETH-USD:
+
+```bash
+python -m sentinel_statarb.feed \
+  --endpoint ipc:///tmp/sentinel_exec_in.ipc \
+  --exchange COINBASE \
+  --symbol-a BTC-USD \
+  --symbol-b ETH-USD
+```
+
+Start `sentinel_exec` before starting the feed bridge.
+
+The bridge normalizes the best bid/ask from both books into the packed `TickMessage` format used by the C++ process. Network access is required for this mode. The live bridge is deliberately separate from the deterministic tests, so the default repository verification does not depend on an exchange being available.
+
+## 7. Docker
+
+A Dockerfile is provided for a clean, isolated run.
+
+Build:
+
+```bash
+docker build -t sentinel-statarb .
+```
+
+Run the default backtest:
+
+```bash
+docker run --rm sentinel-statarb
+```
+
+The image installs the Python package, builds the C++ targets and starts with the same deterministic backtest used by the normal quick-start path.
+
+For users on Windows or macOS who do not want to set up the native Linux toolchain, Docker is the simplest way to reproduce the project environment.
+
+## 8. Benchmarks
+
+The project has separate benchmarks for the execution core, SPSC queue, ZeroMQ transport, end-to-end IPC, strategy replay and DuckDB storage.
+
+A historical GitHub Actions run (#41, 2026-10-03) recorded the following results:
+
+| Measurement | Recorded result |
+| --- | ---: |
+| Python tests | 2/2 passed |
+| C++ CTest | 3/3 passed |
+| C++ execution core | 0.070 µs median · 0.080 µs p99 · 0.130 µs p99.9 |
+| Rigtorp SPSC | 164.372 Mops/s for 5M items |
+| Python → ZeroMQ → C++ | 768.774 orders/s for 1,000 orders |
+| Strategy → C++ replay | 8,592.639 ticks/s for 5,000 ticks |
+| ZeroMQ transport | 39.082 µs median · 47.499 µs p99 · 59.230 µs p99.9 |
+| Async DuckDB logging | 10,000,000 rows at 2,662,236 rows/s |
+
+These are historical measurements from that runner. The active branch has changed since that run, so the values above are evidence of the recorded run, not a claim about the current commit.
+
+For a new measurement:
+
+```bash
+python scripts/system_profile.py | tee results/system_profile.json
+./build/sentinel/sentinel_engine_bench 200000
+./build/sentinel/sentinel_spsc_bench
+./build/sentinel/sentinel_zmq_bench 10000
+./build/sentinel/sentinel_zmq_oneway 200000 -1 -1
+```
+
+On a Linux host where CPU pinning is appropriate:
+
+```bash
+./build/sentinel/sentinel_engine_bench 200000 --cpu 4
+```
+
+The repository does not treat the terms “HPC”, “sub-10 µs”, or “sub-millisecond” as measured facts unless the corresponding benchmark has actually been run and preserved.
+
+For a clean-checkout verification, `python scripts/verify_installation.py` checks the Python dependencies, required native binaries and the `sentinel_exec --help` path.
+
+## 9. Figures and implementation diagrams
+
+The figures in this README are generated from the repository's implementation and recorded benchmark data. The project is a command-line/service stack rather than a GUI, so there are no fabricated product screenshots or placeholder performance charts.
+
+### Runtime topology
+
+![Sentinel StatArb runtime topology](docs/images/architecture.svg)
+
+### Signal and execution timing
+
+![Signal to fill path](docs/images/signal_execution.svg)
+
+### OCO stop-limit behavior
+
+![OCO stop-limit example](docs/images/oco_stop_limit.svg)
+
+The OCO example uses the same 100.00 entry and 5 bps stop/limit test configuration used in the strategy regression tests. It is an explanation of the state machine, not a market-price recording.
+
+### Historical benchmark record
+
+![Historical benchmark record](docs/images/verified_benchmarks.svg)
+
+### Recorded command-line run
+
+![Recorded command-line benchmark output](docs/images/terminal_verified_run.svg)
+
+### Latency measurements
+
+![Latency measurements](docs/images/latency.svg)
+
+### Throughput measurements
+
+![Throughput measurements](docs/images/throughput.svg)
+
+### Active project layout
+
+![Active project layout](docs/images/project_layout.svg)
+
+## 10. Research model
+
+The current strategy has four main pieces:
+
+1. A scalar Kalman regression estimates the hedge ratio between the two instruments.
+2. The spread is formed from the two midpoint prices and standardized with a rolling sample standard deviation.
+3. A volatility-aware debouncer increases the confirmation count as observed volatility rises.
+4. An OCO stop-limit bracket is armed for an active spread position.
+
+The portfolio layer is separate from the signal layer. It handles actual A/B quantities, execution costs, cash and exposure. The same `run_ticks()` function is used for generated scenarios and streamed DuckDB replays.
+
+The research methodology is documented in [docs/RESEARCH_METHODOLOGY.md](docs/RESEARCH_METHODOLOGY.md). The runtime ownership and queue design are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## 11. Tests and checks
+
+Python tests:
+
+```bash
+python -m pytest -q
+```
+
+C++ tests:
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+Installation check:
+
+```bash
+python scripts/verify_installation.py
+```
+
+C++ sanitizer smoke tests are also defined in GitHub Actions. The standard CI workflow covers Python syntax/tests, C++ compilation, CTest, research scripts, IPC, telemetry, replay and benchmark commands.
+
+## 12. Supported environment
+
+The native setup is maintained and tested around:
+
+- Ubuntu 24.04
+- Python 3.12
+- C++20
+- CMake 3.20 or newer
+- libzmq 4.x development headers
+- Git
+
+Ubuntu/Debian systems are the primary native target. Docker is provided for users who prefer a containerized environment.
+
+Windows and macOS native execution are not treated as release targets in this repository. Docker or a Linux environment such as WSL2 is recommended there.
+
+## 13. What is not included
+
+The default repository run does not require anything outside the repository, but several optional capabilities naturally need external inputs:
+
+- live market data requires network connectivity;
+- private exchange feeds would require the credentials and configuration for that venue;
+- replaying a real historical dataset requires that dataset to be supplied;
+- venue-specific fees, borrow, funding, queue position and market impact are not modeled by the current paper executor.
+
+Those are extension points rather than prerequisites for the deterministic demo and test suite.
+
+## 14. Source provenance and licenses
+
+The original project composition used:
+
+- Cryptofeed
+- Financial-Models-Numerical-Methods
+- Rigtorp SPSCQueue
+
+Pinned source references and the reason for keeping the historical merged trees are recorded in [PROVENANCE.md](PROVENANCE.md).
+
+Third-party licensing information is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Project licensing is in [LICENSE](LICENSE).
+
+## 15. Development and contribution
+
+The normal local cycle is:
+
+```bash
+source .venv/bin/activate
+make test
+make backtest
+make replay
+```
+
+For a larger change, run the relevant benchmark after the code change and keep the output with the CI artifacts or benchmark record. Do not copy performance numbers from another machine and present them as local measurements.
+
+The project window recorded in `INPUT_projects.json` is 2026-02-01 through 2026-05-31. New commits are made with their actual commit timestamps.

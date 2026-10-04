@@ -1,0 +1,118 @@
+name: Sentinel CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: sentinel-ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev pkg-config
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[full]'
+
+      - name: Python syntax check
+        run: python -m compileall -q python scripts tests
+
+      - name: Python unit tests
+        run: pytest -q tests
+
+      - name: Build C++
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --parallel
+
+      - name: CTest
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Strategy backtest
+        run: python scripts/run_backtest.py
+
+      - name: Backtest sensitivity smoke test
+        run: python scripts/sensitivity_backtest.py --ticks 10000 --crash-at 5000 --cost-pairs '0:0,0.4:1,5:5'
+
+      - name: Backtest robustness smoke test
+        run: python scripts/robustness_backtest.py --ticks 8000 --seeds '3,7' --crash-fractions '0.25,0.75'
+
+      - name: Backtest parameter sensitivity smoke test
+        run: python scripts/parameter_sensitivity.py --ticks 6000 --entry-zs '1.5,2.0' --exit-zs '0.25,0.5' --windows '100,200'
+
+      - name: Linux host profile
+        run: python scripts/system_profile.py | tee results/system_profile.json
+
+      - name: C++ engine latency benchmark
+        run: ./build/sentinel/sentinel_engine_bench | tee results/engine_latency.txt
+
+      - name: C++ SPSC benchmark
+        run: ./build/sentinel/sentinel_spsc_bench | tee results/spsc_benchmark.txt
+
+      - name: ZeroMQ IPC end-to-end
+        run: python scripts/benchmark_ipc.py --orders 1000
+
+      - name: Strategy to C++ execution replay
+        run: python scripts/run_replay.py --ticks 5000
+
+      - name: Connected telemetry -> DuckDB smoke test
+        run: python scripts/benchmark_telemetry.py --ticks 100000 --batch 10000
+
+      - name: DuckDB -> strategy replay
+        run: python scripts/replay_duckdb.py --db results/telemetry.duckdb --limit 100000
+
+      - name: ZeroMQ one-way IPC latency
+        run: ./build/sentinel/sentinel_zmq_oneway 200000 -1 -1 | tee results/zmq_oneway_latency.txt
+
+      - name: ZeroMQ transport latency
+        run: ./build/sentinel/sentinel_zmq_bench 10000 | tee results/zmq_latency.txt
+
+      - name: 10M DuckDB asynchronous logging benchmark
+        run: python scripts/benchmark_duckdb.py --ticks 10000000 --batch 100000
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-benchmarks
+          path: results/
+
+  cpp-sanitizers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev pkg-config
+
+      - name: Build C++ with AddressSanitizer and UBSan
+        run: |
+          cmake -S . -B build-san -DCMAKE_BUILD_TYPE=Debug             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          cmake --build build-san --parallel
+
+      - name: Run engine sanitizer smoke test
+        run: |
+          ASAN_OPTIONS=detect_leaks=1           UBSAN_OPTIONS=print_stacktrace=1           ctest --test-dir build-san -R '^sentinel_engine_smoke$' --output-on-failure
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t sentinel-statarb .
+
+      - name: Run clean-container backtest
+        run: docker run --rm sentinel-statarb
