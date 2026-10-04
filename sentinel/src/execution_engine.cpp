@@ -2,10 +2,30 @@
 
 #include <chrono>
 #include <cmath>
+#include <stdexcept>
 
 namespace sentinel {
 
-ExecutionEngine::ExecutionEngine(EngineConfig cfg) : cfg_(cfg) {}
+ExecutionEngine::ExecutionEngine(EngineConfig cfg) : cfg_(cfg) {
+  if (!(cfg_.hedge_ratio > 0.0) || !std::isfinite(cfg_.hedge_ratio)) {
+    throw std::invalid_argument("hedge_ratio must be finite and positive");
+  }
+  if (cfg_.slippage_bps < 0.0 || !std::isfinite(cfg_.slippage_bps)) {
+    throw std::invalid_argument("slippage_bps must be finite and non-negative");
+  }
+  if (cfg_.oco_stop_bps < 0.0 || !std::isfinite(cfg_.oco_stop_bps)) {
+    throw std::invalid_argument("oco_stop_bps must be finite and non-negative");
+  }
+  if (cfg_.oco_limit_bps < 0.0 || !std::isfinite(cfg_.oco_limit_bps)) {
+    throw std::invalid_argument("oco_limit_bps must be finite and non-negative");
+  }
+  if (cfg_.max_quote_age_us < 0.0 || !std::isfinite(cfg_.max_quote_age_us)) {
+    throw std::invalid_argument("max_quote_age_us must be finite and non-negative");
+  }
+  if (cfg_.commission_bps < 0.0 || !std::isfinite(cfg_.commission_bps)) {
+    throw std::invalid_argument("commission_bps must be finite and non-negative");
+  }
+}
 
 std::uint64_t ExecutionEngine::now_ns() noexcept {
   const auto now = std::chrono::steady_clock::now().time_since_epoch();
@@ -39,6 +59,12 @@ bool ExecutionEngine::on_order(const OrderMessage& order, ReportMessage& report)
   report.qty = order.qty;
 
   ++state_.orders;
+  if (order.type != MessageType::kOrder ||
+      (order.side != Side::kBuy && order.side != Side::kSell) ||
+      !(order.qty > 0.0) || !std::isfinite(order.qty)) {
+    report.status = 4;  // invalid order
+    return false;
+  }
   if (!have_quote_) return false;
 
   const auto age_us = (report.recv_ts_ns > last_tick_.ts_ns)
@@ -65,6 +91,10 @@ bool ExecutionEngine::on_order(const OrderMessage& order, ReportMessage& report)
   state_.position_b -= cfg_.hedge_ratio * signed_qty;
   state_.cash -= signed_qty * report.fill_a;
   state_.cash += cfg_.hedge_ratio * signed_qty * report.fill_b;
+  const double commission = (std::abs(signed_qty * report.fill_a)
+                           + std::abs(cfg_.hedge_ratio * signed_qty * report.fill_b))
+                          * cfg_.commission_bps * 1e-4;
+  state_.cash -= commission;
 
   if (!oco_active_) {
     oco_active_ = true;
@@ -120,6 +150,11 @@ bool ExecutionEngine::check_oco(ReportMessage& report) {
   report.qty = std::abs(state_.position_a);
   report.fill_a = (report.side == Side::kBuy) ? last_tick_.ask_a : last_tick_.bid_a;
   report.fill_b = (report.side == Side::kBuy) ? last_tick_.bid_b : last_tick_.ask_b;
+  report.fill_a = apply_slippage(report.fill_a, report.side, cfg_.slippage_bps);
+  report.fill_b = apply_slippage(
+      report.fill_b,
+      (report.side == Side::kBuy) ? Side::kSell : Side::kBuy,
+      cfg_.slippage_bps);
   report.spread = s;
   report.oco_stop_spread = stop_spread_;
   report.oco_limit_spread = limit_spread_;
@@ -127,6 +162,10 @@ bool ExecutionEngine::check_oco(ReportMessage& report) {
 
   state_.cash -= state_.position_a * report.fill_a;
   state_.cash += state_.position_b * report.fill_b;
+  const double commission = (std::abs(state_.position_a * report.fill_a)
+                           + std::abs(state_.position_b * report.fill_b))
+                          * cfg_.commission_bps * 1e-4;
+  state_.cash -= commission;
   state_.position_a = 0.0;
   state_.position_b = 0.0;
   oco_active_ = false;
