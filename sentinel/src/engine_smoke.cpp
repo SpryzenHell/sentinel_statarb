@@ -63,5 +63,14 @@ int main() {
   require(!engine.on_order(order, report), "stale order was accepted");
   require(engine.state().stale_rejects == 1, "stale counter wrong");
 
+  tick.ts_ns = now_ns();
+  engine.on_tick(tick);
+  order.id = 3;
+  order.side = static_cast<sentinel::Side>(0);
+  order.qty = 1.0;
+  order.ts_ns = tick.ts_ns;
+  require(!engine.on_order(order, report), "invalid side was accepted");
+  require(report.status == 4, "invalid order status wrong");
+
   std::cout << "engine_smoke=PASS\n";
 }
