@@ -86,3 +86,21 @@ jobs:
         with:
           name: sentinel-benchmarks
           path: results/
+
+  cpp-sanitizers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libzmq3-dev pkg-config
+
+      - name: Build C++ with AddressSanitizer and UBSan
+        run: |
+          cmake -S . -B build-san -DCMAKE_BUILD_TYPE=Debug             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          cmake --build build-san --parallel
+
+      - name: Run engine sanitizer smoke test
+        run: |
+          ASAN_OPTIONS=detect_leaks=1           UBSAN_OPTIONS=print_stacktrace=1           ctest --test-dir build-san -R '^sentinel_engine_smoke$' --output-on-failure
