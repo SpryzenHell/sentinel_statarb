@@ -48,6 +48,9 @@ jobs:
       - name: Backtest robustness smoke test
         run: python scripts/robustness_backtest.py --ticks 8000 --seeds '3,7' --crash-fractions '0.25,0.75'
 
+      - name: Backtest parameter sensitivity smoke test
+        run: python scripts/parameter_sensitivity.py --ticks 6000 --entry-zs '1.5,2.0' --exit-zs '0.25,0.5' --windows '100,200'
+
       - name: Linux host profile
         run: python scripts/system_profile.py | tee results/system_profile.json
 
